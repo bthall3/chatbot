@@ -1,15 +1,17 @@
 <!doctype html>
+<!-- When you change any .js/.css file, bump the version in every ?v= link and in the "version" label below, so browsers fetch the new files. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Balanced Chatbot Lab</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2026-10-20.4">
 </head>
 <body>
   <header class="topbar">
     <h1>Balanced Chatbot Lab</h1>
     <p>Test the even-handed chatbot: each reply should give one point <em>for</em> your view and one point <em>against</em> it.</p>
+    <small class="muted" id="version">Version 2026-10-20.4 (transitions)</small>
     <span id="mock-badge" class="badge" hidden>Mock mode: no real API calls</span>
   </header>
 
@@ -114,8 +116,8 @@
     </section>
   </main>
 
-  <script src="config.js"></script>
-  <script src="chat-core.js"></script>
-  <script src="app.js"></script>
+  <script src="config.js?v=2026-10-20.4"></script>
+  <script src="chat-core.js?v=2026-10-20.4"></script>
+  <script src="app.js?v=2026-10-20.4"></script>
 </body>
 </html>
