@@ -153,8 +153,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 #send-button-1 { background: var(--accent); border: none; color: #fff; }
 
 /* Feedback cards */
-#turn-feedback { list-style: none; padding: 0 4px 0 0; margin: 8px 0; display: flex; flex-direction: column; gap: 10px; }
-.turn-card { flex-shrink: 0; }
+#turn-feedback { list-style: none; padding: 0 4px 0 0; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
 
 /* Feedback column: fixed to the viewport height; the list of replies scrolls
    while name, overall notes and the Email button stay visible. */
@@ -166,16 +165,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 @media (max-width: 1100px) {
   #turn-feedback { max-height: 60vh; }
 }
-.turn-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
-.turn-card h3 { margin: 0 0 6px; font-size: 0.85rem; color: var(--muted); }
-.turn-card .you { font-size: 0.82rem; color: var(--muted); margin: 0 0 6px; }
-.turn-card dl { margin: 0 0 8px; font-size: 0.85rem; }
-.turn-card dt { font-weight: 600; }
-.turn-card dd { margin: 0 0 4px; }
-.turn-card .flag { font-size: 0.78rem; color: var(--bad); }
-.rate { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; font-size: 0.85rem; }
-.rate .btns { display: flex; gap: 4px; }
-.rate button { padding: 2px 9px; }
-.rate button[aria-pressed="true"].up { background: var(--good); border-color: var(--good); color: #fff; }
-.rate button[aria-pressed="true"].down { background: var(--bad); border-color: var(--bad); color: #fff; }
-.turn-card textarea { font-size: 0.85rem; }
+#turn-feedback li { font-size: 0.85rem; line-height: 1.45; padding: 6px 8px; border-radius: 6px; white-space: pre-wrap; flex-shrink: 0; }
+#turn-feedback .tx-you { background: var(--bg); }
+#turn-feedback .tx-bot { border: 1px solid var(--border); }
+#turn-feedback .tx-meta { margin-top: 2px; font-size: 0.75rem; color: var(--muted); }

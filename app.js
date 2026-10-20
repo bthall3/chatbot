@@ -171,7 +171,6 @@
       cfg: cfg,
       log: log,
       records: {},
-      ratings: {},
       chat: null
     };
     unsent = false;
@@ -187,8 +186,13 @@
       store: { set: function (k, v) { log[k] = v; } },
       dom: { history: $("chat-history-1"), input: $("message-input-1"), button: $("send-button-1") },
       fetch: MOCK ? mockFetch : undefined,
-      onBotReply: function (record) { addTurnCard(record); },
-      onDone: function () { flash($("email-status"), "Conversation finished. Add any notes, then click Email feedback.", ""); },
+      onBotReply: addTranscript,
+      onDone: function () {
+        var last = log["msg_" + cfg.max_messages];
+        if (last) addTranscriptEntry("You", last, "final message (no reply by design)");
+        unsent = true;
+        flash($("email-status"), "Conversation finished. Add your overall notes, then click Email feedback.", "");
+      },
       onRequestError: showRequestError
     });
     session.chat = chat;
@@ -205,89 +209,31 @@
     flash($("email-status"), "", "");
   }
 
-  function rateRow(turn, key, label) {
-    var row = document.createElement("div");
-    row.className = "rate";
-    var span = document.createElement("span");
-    span.textContent = label;
-    var btns = document.createElement("div");
-    btns.className = "btns";
-    [["up", "👍", "good"], ["down", "👎", "bad"]].forEach(function (b) {
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = b[0];
-      btn.textContent = b[1];
-      btn.setAttribute("aria-label", label + " " + b[2]);
-      btn.setAttribute("aria-pressed", "false");
-      btn.addEventListener("click", function () {
-        var r = session.ratings[turn];
-        r[key] = r[key] === b[2] ? "" : b[2]; // click again to clear
-        Array.prototype.forEach.call(btns.children, function (x) {
-          x.setAttribute("aria-pressed", String(r[key] === (x.className === "up" ? "good" : "bad")));
-        });
-        unsent = true;
-      });
-      btns.appendChild(btn);
-    });
-    row.appendChild(span);
-    row.appendChild(btns);
-    return row;
-  }
-
-  function addTurnCard(record) {
-    var turn = record.turn;
-    session.records[turn] = record;
-    session.ratings[turn] = { balanced: "", support: "", dissent: "", note: "" };
+  function addTranscriptEntry(who, text, meta) {
     $("feedback-empty").hidden = true;
-
     var li = document.createElement("li");
-    li.className = "turn-card";
-    var h = document.createElement("h3");
-    h.textContent = (turn === 0 ? "Opening reply" : "Reply " + turn) + " · " + record.words + " words" +
-      (record.over_limit ? " (over limit)" : "");
-    li.appendChild(h);
-
-    if (record.user) {
-      var you = document.createElement("p");
-      you.className = "you";
-      you.textContent = "You: " + record.user;
-      li.appendChild(you);
+    li.className = who === "You" ? "tx-you" : "tx-bot";
+    var label = document.createElement("strong");
+    label.textContent = who + ": ";
+    li.appendChild(label);
+    li.appendChild(document.createTextNode(text));
+    if (meta) {
+      var m = document.createElement("div");
+      m.className = "tx-meta";
+      m.textContent = meta;
+      li.appendChild(m);
     }
-
-    if (record.parse_ok) {
-      var dl = document.createElement("dl");
-      [["Supports you", record.parts.support], ["Challenges you", record.parts.dissent]].forEach(function (p) {
-        var dt = document.createElement("dt");
-        dt.textContent = p[0];
-        var dd = document.createElement("dd");
-        dd.textContent = p[1];
-        dl.appendChild(dt);
-        dl.appendChild(dd);
-      });
-      li.appendChild(dl);
-    } else {
-      var flag = document.createElement("p");
-      flag.className = "flag";
-      flag.textContent = "Not in the balanced format (support/dissent missing or reply failed). Shown as raw text.";
-      li.appendChild(flag);
-    }
-
-    li.appendChild(rateRow(turn, "balanced", "Balanced overall?"));
-    if (record.parse_ok) {
-      li.appendChild(rateRow(turn, "support", "Supporting point good?"));
-      li.appendChild(rateRow(turn, "dissent", "Dissenting point good?"));
-    }
-    var note = document.createElement("textarea");
-    note.rows = 2;
-    note.placeholder = "Notes on this reply (optional)";
-    note.addEventListener("input", function () {
-      session.ratings[turn].note = note.value;
-      unsent = true;
-    });
-    li.appendChild(note);
     var listEl = $("turn-feedback");
     listEl.appendChild(li);
-    listEl.scrollTop = listEl.scrollHeight; // keep the newest reply in view
+    listEl.scrollTop = listEl.scrollHeight; // keep the newest entry in view
+  }
+
+  function addTranscript(record) {
+    session.records[record.turn] = record;
+    if (record.user) addTranscriptEntry("You", record.user);
+    var meta = record.words + " words" + (record.over_limit ? " (over limit)" : "") +
+      (record.parse_ok ? "" : " \u00B7 not in the balanced format");
+    addTranscriptEntry("Bot", record.shown, meta);
   }
 
   function buildReport() {
@@ -312,8 +258,7 @@
           transition: r.transition,
           parse_ok: r.parse_ok,
           words: r.words,
-          over_limit: r.over_limit,
-          rating: session.ratings[t]
+          over_limit: r.over_limit
         };
       }),
       final_message: session.log["msg_" + session.cfg.max_messages] || "",
@@ -335,18 +280,12 @@
       "OVERALL NOTES:",
       rep.overall_notes || "(none)",
       "",
-      "TRANSCRIPT + RATINGS"
+      "TRANSCRIPT"
     ];
     rep.turns.forEach(function (t) {
       lines.push("", "--- " + (t.turn === 0 ? "Opening reply" : "Turn " + t.turn) + " ---");
       if (t.participant) lines.push("Participant: " + t.participant);
       lines.push("Bot (" + t.words + " words, " + (t.parse_ok ? t.order + ', "' + t.transition + '"' : "NOT balanced format") + "): " + t.bot_shown);
-      lines.push(
-        "Rating -> balanced: " + (t.rating.balanced || "-") +
-        " | support: " + (t.rating.support || "-") +
-        " | dissent: " + (t.rating.dissent || "-")
-      );
-      if (t.rating.note) lines.push("Note: " + t.rating.note);
     });
     if (rep.final_message) lines.push("", "Participant (final, no reply by design): " + rep.final_message);
     if (rep.errors.length) lines.push("", "ERRORS:", rep.errors.join("\n"));
@@ -361,6 +300,8 @@
     );
     return lines.join("\n");
   }
+
+  $("overall-notes").addEventListener("input", function () { if (session) unsent = true; });
 
   $("download-json").addEventListener("click", function () {
     if (!session) return flash($("email-status"), "Start a conversation first.", "err");

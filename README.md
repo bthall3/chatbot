@@ -14,7 +14,7 @@ Open the GitHub Pages URL; mock mode is described further down.
 
 - **Left:** edit the system prompt and settings, then click **Apply & restart chat**. Your edits are saved in your browser.
 - **Middle:** pick a topic or write your own, explain your view, and chat. The page stops after the set number of messages (5 by default).
-- **Right:** rate each reply (balanced? good supporting point? good dissenting point?), add notes, and click **Email feedback**. **Download JSON** is a fallback.
+- **Right:** the transcript builds up as you chat. Add your overall notes at the bottom and click **Email feedback**, which sends the transcript, notes and settings. **Download JSON** is a fallback.
 
 Add `?mock=1` to the URL to test the page without calling the API:
 - typing `FAIL` simulates a network error;
@@ -58,4 +58,4 @@ Add `?mock=1` to the URL to test the page without calling the API:
 - **Public page:** anyone with the URL can use the proxy, which spends API credit.
 - **Length confound:** about 50 words per reply here versus 30 in the launched arms.
 - **Model shutdown:** `gpt-4.1-nano`, the model used by the launched arms, is scheduled to shut down on Oct 23, 2026, per OpenAI's deprecations page.
-- **Accuracy:** the "evidence" comes from a small model and can be wrong or made up. The "good point?" ratings are there to catch this during piloting.
+- **Accuracy:** the "evidence" comes from a small model and can be wrong or made up. Use the overall notes to flag weak or inaccurate points during piloting.
