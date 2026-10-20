@@ -15,6 +15,9 @@ The existing custom CSS (`#chat-container`, `.bot-message`, …) already styles 
 .bot-message.typing { font-style: italic; color: #888; }
 .bot-message.error { background: #fdecea; }
 .user-message.failed { opacity: .55; }
+.message { white-space: pre-wrap; }
+#chat-input { align-items: flex-end; }
+#message-input-1 { resize: none; overflow-y: auto; line-height: 1.4; max-height: calc(6 * 1.4em + 16px); font-family: inherit; }
 ```
 
 ## 2. Survey flow

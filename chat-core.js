@@ -343,12 +343,21 @@ var BalancedChat = (function () {
       onDone();
     }
 
+    // Grow the message box with its content (CSS max-height caps it; then it scrolls).
+    function autoGrow() {
+      var el = dom.input;
+      if (!el.style || el.tagName !== "TEXTAREA") return;
+      el.style.height = "auto";
+      el.style.height = el.scrollHeight + (el.offsetHeight - el.clientHeight) + "px";
+    }
+
     function send() {
       if (state.busy || state.done) return Promise.resolve(null);
       var message = (dom.input.value || "").trim();
       if (!message) return Promise.resolve(null);
       var turn = state.turn + 1;
       dom.input.value = "";
+      autoGrow();
       var userEl = addBubble(message, "user");
 
       // Last participant message: no API call, so a failed request can't strand anyone.
@@ -371,6 +380,7 @@ var BalancedChat = (function () {
           setBusy(false);
           addBubble(cfg.error_message, "bot", "error");
           dom.input.value = message;
+          autoGrow();
           return null;
         });
     }
@@ -379,12 +389,14 @@ var BalancedChat = (function () {
       e.preventDefault();
       send();
     });
+    // Enter sends; Shift+Enter adds a new line.
     dom.input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") {
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
         e.preventDefault(); // stop Qualtrics from advancing the page
         send();
       }
     });
+    dom.input.addEventListener("input", autoGrow);
 
     // Ignore any reply still in flight (e.g. the test page restarts the chat).
     function stop() {

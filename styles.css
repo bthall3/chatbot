@@ -124,7 +124,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   font-size: 16px;
 }
 #chat-history-1 { flex: 1; overflow-y: auto; padding: 10px; }
-.message { display: flex; flex-direction: column; margin: 10px 0; }
+.message { display: flex; flex-direction: column; margin: 10px 0; white-space: pre-wrap; }
 .user-message, .bot-message {
   max-width: 80%;
   padding: 0.5rem 0.875rem;
@@ -137,8 +137,16 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .bot-message { border-radius: 12px 12px 12px 0; background: var(--bot-bg); color: var(--bot-text); }
 .bot-message.typing { font-style: italic; color: var(--muted); }
 .bot-message.error { background: var(--error-bg); }
-#chat-input { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border); }
-#message-input-1 { flex: 1; margin: 0; font-size: 16px; }
+#chat-input { display: flex; align-items: flex-end; gap: 8px; padding: 10px; border-top: 1px solid var(--border); }
+#message-input-1 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+  resize: none;
+  overflow-y: auto;
+  max-height: calc(6 * 1.4em + 16px); /* grows to about 6 lines, then scrolls */
+}
 #send-button-1 { background: var(--accent); border: none; color: #fff; }
 
 /* Feedback cards */
