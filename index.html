@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Balanced Chatbot Lab</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Balanced Chatbot Lab</h1>
+    <p>Test the even-handed chatbot: each reply should give one point <em>for</em> your view and one point <em>against</em> it.</p>
+    <span id="mock-badge" class="badge" hidden>Mock mode: no real API calls</span>
+  </header>
+
+  <main class="layout">
+    <!-- LEFT: prompt + settings -->
+    <section class="panel" id="settings-panel" aria-labelledby="settings-title">
+      <h2 id="settings-title">Prompt &amp; settings</h2>
+      <form id="settings-form">
+        <label for="s-prompt_template">System prompt
+          <small><code>{topic}</code>, <code>{p_response}</code>, <code>{word_limit}</code> are filled in automatically.</small>
+        </label>
+        <textarea id="s-prompt_template" name="prompt_template" rows="16" spellcheck="false"></textarea>
+
+        <div class="grid2">
+          <label>Model <input name="model" type="text"></label>
+          <label>Temperature <input name="temperature" type="number" min="0" max="2" step="0.1"></label>
+          <label>Max tokens <input name="max_tokens" type="number" min="50" step="10"></label>
+          <label>Word limit <input name="word_limit" type="number" min="10" step="5"></label>
+          <label>Participant messages <input name="max_messages" type="number" min="2" max="20"></label>
+          <label>Delay (ms/word) <input name="delay_ms_per_word" type="number" min="0" step="50"></label>
+        </div>
+        <label>Order of points
+          <select name="order">
+            <option value="support-first">Support first</option>
+            <option value="dissent-first">Dissent first</option>
+            <option value="random">Random each turn</option>
+          </select>
+        </label>
+
+        <details>
+          <summary>Advanced</summary>
+          <label>Opening-turn instruction <textarea name="opening_template" rows="4" spellcheck="false"></textarea></label>
+          <label>Label when support comes first <input name="label_support_first" type="text"></label>
+          <label>Label when dissent comes first <input name="label_dissent_first" type="text"></label>
+          <label>Label for the second point <input name="label_second" type="text"></label>
+        </details>
+
+        <div class="row">
+          <button type="submit" class="primary">Apply &amp; restart chat</button>
+          <button type="button" id="reset-settings">Reset to defaults</button>
+        </div>
+        <p id="settings-status" class="status" role="status"></p>
+      </form>
+
+      <details id="sent-prompt-box">
+        <summary>Prompt actually sent (this conversation)</summary>
+        <pre id="sent-prompt"></pre>
+      </details>
+    </section>
+
+    <!-- MIDDLE: chat -->
+    <section class="panel" id="chat-panel" aria-labelledby="chat-title">
+      <h2 id="chat-title">Chat</h2>
+
+      <form id="setup-form" class="card">
+        <label for="topic-select">Pick a topic</label>
+        <select id="topic-select" required></select>
+        <input id="topic-other" type="text" placeholder="Write your own topic, e.g. Michael Jordan is the GOAT" hidden>
+        <label for="p-response">Explain why you hold your view
+          <small>The chatbot uses this to start the conversation (max 500 characters).</small>
+        </label>
+        <textarea id="p-response" rows="5" maxlength="500" required></textarea>
+        <small id="char-count" class="muted">0 / 500</small>
+        <button type="submit" class="primary">Start conversation</button>
+      </form>
+
+      <div id="chat-area" hidden>
+        <p class="topic-line"><strong>Topic:</strong> <span id="topic-shown"></span></p>
+        <div id="chat-container">
+          <div id="chat-history-1"></div>
+          <div id="chat-input">
+            <input type="text" placeholder="Type your message here..." id="message-input-1" autocomplete="off">
+            <button id="send-button-1">Send</button>
+          </div>
+        </div>
+        <button type="button" id="new-chat">New conversation</button>
+      </div>
+    </section>
+
+    <!-- RIGHT: feedback -->
+    <section class="panel" id="feedback-panel" aria-labelledby="feedback-title">
+      <h2 id="feedback-title">Feedback</h2>
+      <label>Your name <input id="tester-name" type="text" autocomplete="name"></label>
+      <p class="muted" id="feedback-empty">Rate each chatbot reply here once the conversation starts.</p>
+      <ol id="turn-feedback"></ol>
+      <label for="overall-notes">Overall notes</label>
+      <textarea id="overall-notes" rows="5" placeholder="Did the bot feel balanced? Was the evidence accurate? Anything off?"></textarea>
+      <div class="row">
+        <button type="button" id="email-feedback" class="primary">Email feedback</button>
+        <button type="button" id="download-json">Download JSON</button>
+      </div>
+      <p id="email-status" class="status" role="status"></p>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="chat-core.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
