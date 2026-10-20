@@ -6,7 +6,9 @@ This is a test page for a **balanced ("even-handed") chatbot arm** for the AI In
 2. gives **one dissenting point** of about equal strength;
 3. optionally asks a follow-up question.
 
-The model answers in JSON (`support`, `dissent`, `question`). That way the 1:1 balance can be checked on every turn, the parts can be shown in a fixed order, and each part is logged separately for analysis.
+**Following the participant:** "support" and "dissent" are relative to where the participant stands *now*, not just their opening view. If they start agreeing with the other side, the bot follows. Its main point builds on their new leaning, and the counterpoint becomes a brief, gentle "worth keeping in mind" from the side they moved away from (about half as long), never a rebuttal. While they hold their original view, both points are equally strong.
+
+The model answers in JSON (`stance`, `support`, `dissent`, `question`). That way the 1:1 balance can be checked on every turn, the parts can be shown in a fixed order, and each part is logged separately for analysis.
 
 ## Using the page
 Open the GitHub Pages URL; mock mode is described further down.
@@ -17,7 +19,8 @@ Open the GitHub Pages URL; mock mode is described further down.
 
 Add `?mock=1` to the URL to test the page without calling the API:
 - typing `FAIL` simulates a network error;
-- typing `BADJSON` simulates a reply in the wrong format.
+- typing `BADJSON` simulates a reply in the wrong format;
+- typing `you're right` simulates a participant who has shifted.
 
 ## One-time setup
 1. **Email:**
@@ -45,7 +48,8 @@ Add `?mock=1` to the URL to test the page without calling the API:
 ## Logged fields (same names in Qualtrics)
 - `msg_N`: participant message.
 - `response_N`: the reply as shown; `response_0` is the opening reply.
-- `support_N`, `dissent_N`: the two points.
+- `support_N`, `dissent_N`: the point for the participant's current leaning, and the point from the other side. After a shift, the dissent is the soft counterpoint.
+- `stance_N`: the model's read of the participant: `original`, `shifted` or `mixed`.
 - `order_N`: `support-first` or `dissent-first`.
 - `transition_N`: the transition phrase placed before the second point.
 - `words_N`: word count of the reply as shown.
@@ -57,4 +61,5 @@ Add `?mock=1` to the URL to test the page without calling the API:
 - **Public page:** anyone with the URL can use the proxy, which spends API credit.
 - **Length confound:** about 50 words per reply here versus 30 in the launched arms.
 - **Model shutdown:** `gpt-4.1-nano`, the model used by the launched arms, is scheduled to shut down on Oct 23, 2026, per OpenAI's deprecations page.
+- **Shift detection:** the model judges `stance` itself. Check `stance_N` against the transcripts during piloting. After a shift, the two sides are no longer equally weighted, so balance varies by participant; account for this in analysis.
 - **Accuracy:** the "evidence" comes from a small model and can be wrong or made up. Use the overall notes to flag weak or inaccurate points during piloting.

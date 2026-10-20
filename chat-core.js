@@ -15,18 +15,22 @@ var BalancedChat = (function () {
   var DEFAULT_PROMPT = [
     'You are discussing the topic "{topic}" with a participant. Their reasoning: "{p_response}".',
     "Your goal is to make their information search balanced. Every reply must contain these fields:",
-    "(1) support: ONE concrete piece of evidence or argument that SUPPORTS their position and that they have NOT already mentioned;",
-    "(2) dissent: ONE concrete piece of evidence or argument that CHALLENGES their position, about as strong and specific as the support;",
-    "(3) question: an optional short follow-up question (may be empty).",
+    "(1) stance: where the participant stands NOW, judged from the whole conversation: \"original\" (still holds their starting view), \"shifted\" (now leaning toward the other side) or \"mixed\" (undecided or partly persuaded);",
+    "(2) support: ONE concrete piece of evidence or argument that SUPPORTS the position they currently lean toward and that they have NOT already mentioned;",
+    "(3) dissent: ONE concrete piece of evidence or argument from the other side, about as strong and specific as the support;",
+    "(4) question: an optional short follow-up question (may be empty).",
+    "Follow the participant. If their stance is \"shifted\" or \"mixed\", build on the direction they are moving in: support backs their new leaning, and dissent becomes a brief, gentle point worth keeping in mind from the side they moved away from (at most {soft_words} words). Never rebut or argue against what they just conceded.",
     "Write support and dissent as plain statements with no lead-in or transition word (no \"However\", \"On the other hand\", \"One point in your favor\"); a transition is added for you.",
     "Start support and dissent with a lowercase letter unless the first word is a proper noun or \"I\".",
     "Never reuse evidence from earlier turns. Vary your wording, and don't open every reply the same way. Stay neutral; never say which side is right.",
     "STRICT word budget: support at most {point_words}, dissent at most {point_words}, question at most {question_words}; the whole reply must stay under {word_limit} words. Count before answering; replies over the limit are rejected.",
-    'Respond ONLY with JSON: {"support":"","dissent":"","question":""}',
+    'Respond ONLY with JSON: {"stance":"","support":"","dissent":"","question":""}',
     "Go straight to the evidence: no greeting, no restating or acknowledging their view.",
     "",
     'Example (topic: Is Michael Jordan the GOAT? Participant: "Yes, he was the most dominant player ever."):',
-    '{"support":"he went 6-0 in the Finals and won 6 Finals MVPs.","dissent":"LeBron has more career points and a far longer prime.","question":"How much should longevity count?"}'
+    '{"stance":"original","support":"he went 6-0 in the Finals and won 6 Finals MVPs.","dissent":"LeBron has more career points and a far longer prime.","question":"How much should longevity count?"}',
+    'Later in that conversation the participant says: "Okay, LeBron\'s longevity is hard to argue with."',
+    '{"stance":"shifted","support":"he made 10 straight All-NBA first teams, sustained excellence few can match.","dissent":"Jordan\'s Finals record is still unmatched.","question":"Does peak or career matter more to you now?"}'
   ].join("\n");
 
   var DEFAULT_OPENING_PROMPT =
@@ -63,24 +67,27 @@ var BalancedChat = (function () {
 
   // Only known placeholders are filled, so JSON braces in the template are left alone.
   function fillTemplate(template, vars) {
-    return String(template).replace(/\{(topic|p_response|word_limit|ack_words|point_words|question_words)\}/g, function (m, key) {
+    return String(template).replace(/\{(topic|p_response|word_limit|ack_words|point_words|soft_words|question_words)\}/g, function (m, key) {
       var v = vars[key];
       return v === undefined || v === null ? "" : String(v).replace(/[\r\n]+/g, " ").trim();
     });
   }
 
   // Per-part budgets that add up to the limit, leaving room for the transition
-  // phrase the page inserts. word_limit 50 -> support 19, dissent 19, question 9.
+  // phrase the page inserts. word_limit 50 -> support 18, dissent 18 (soft
+  // counterpoint after a shift: 9), question 9.
   // ack_words stays 0 so older custom prompts that still use {ack_words} don't break.
   function wordBudgets(cfg) {
     var limit = parseInt(cfg.word_limit, 10) || 50;
     var room = Math.max(limit - transitionAllowance(cfg), 8);
     var question = Math.floor(room * 0.2);
+    var point = Math.floor((room - question) / 2);
     return {
       word_limit: limit,
       ack_words: 0,
       question_words: question,
-      point_words: Math.floor((room - question) / 2)
+      point_words: point,
+      soft_words: Math.floor(point / 2)
     };
   }
 
@@ -116,6 +123,13 @@ var BalancedChat = (function () {
     return typeof v === "string" ? v.trim() : "";
   }
 
+  var STANCES = ["original", "shifted", "mixed"];
+
+  // Has the participant moved toward the other side? Then the bot follows them.
+  function hasShifted(parts) {
+    return !!parts && (parts.stance === "shifted" || parts.stance === "mixed");
+  }
+
   // Accepts clean JSON, ```json fenced``` JSON, or JSON surrounded by prose.
   function parseBalancedReply(text) {
     var raw = typeof text === "string" ? text : "";
@@ -128,7 +142,9 @@ var BalancedChat = (function () {
     } catch (e) {
       return { ok: false, parts: null, raw: raw };
     }
+    var stance = asText(obj.stance).toLowerCase();
     var parts = {
+      stance: STANCES.indexOf(stance) !== -1 ? stance : "",
       support: asText(obj.support),
       dissent: asText(obj.dissent),
       question: asText(obj.question)
@@ -203,7 +219,7 @@ var BalancedChat = (function () {
   // Last resort for a reply that is still too long: drop the question. The
   // supporting and dissenting points are never cut.
   function trimToLimit(parts, limit, allowance) {
-    var out = { support: parts.support, dissent: parts.dissent, question: parts.question };
+    var out = { stance: parts.stance, support: parts.support, dissent: parts.dissent, question: parts.question };
     if (partsWords(out) + allowance > limit) out.question = "";
     return out;
   }
@@ -350,7 +366,9 @@ var BalancedChat = (function () {
     }
 
     function recordTurn(turn, userMessage, parsed) {
-      var order = resolveOrder(cfg.order);
+      // After a shift, lead with the point for their new leaning; the soft
+      // counterpoint always comes second.
+      var order = parsed.ok && hasShifted(parsed.parts) ? "support-first" : resolveOrder(cfg.order);
       var transition = parsed.ok ? pickTransition(parseTransitions(cfg.transitions), state.lastTransition) : "";
       if (transition) state.lastTransition = transition;
       var shown = parsed.ok ? renderReply(parsed.parts, order, transition) : parsed.raw.trim();
@@ -362,6 +380,7 @@ var BalancedChat = (function () {
         raw: parsed.raw,
         order: parsed.ok ? order : "",
         transition: transition,
+        stance: parsed.ok ? parsed.parts.stance : "",
         parse_ok: parsed.ok ? 1 : 0,
         words: countWords(shown),
         over_limit: countWords(shown) > parseInt(cfg.word_limit, 10) ? 1 : 0
@@ -372,6 +391,7 @@ var BalancedChat = (function () {
       store.set("dissent_" + turn, parsed.ok ? parsed.parts.dissent : "");
       store.set("order_" + turn, record.order);
       store.set("transition_" + turn, transition);
+      store.set("stance_" + turn, record.stance);
       store.set("parse_ok_" + turn, String(record.parse_ok));
       store.set("words_" + turn, String(record.words));
       state.records.push(record);
@@ -498,6 +518,7 @@ var BalancedChat = (function () {
     buildRequest: buildRequest,
     parseBalancedReply: parseBalancedReply,
     resolveOrder: resolveOrder,
+    hasShifted: hasShifted,
     parseTransitions: parseTransitions,
     pickTransition: pickTransition,
     renderReply: renderReply,

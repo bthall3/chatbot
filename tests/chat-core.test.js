@@ -115,7 +115,7 @@ test("buildSystemPrompt fills placeholders but leaves JSON braces alone", () => 
   assert.match(sys, /topic "T"/);
   assert.match(sys, /"line1 line2"/);
   assert.match(sys, /under 50 words/);
-  assert.match(sys, /\{"support":"","dissent":"","question":""\}/);
+  assert.match(sys, /\{"stance":"","support":"","dissent":"","question":""\}/);
   assert.doesNotMatch(sys, /acknowledge:/);
   assert.doesNotMatch(sys, /\{topic\}|\{p_response\}|\{word_limit\}/);
 });
@@ -222,7 +222,7 @@ const reply = (ack, sup, dis, q) => JSON.stringify({
 test("wordBudgets split the limit across parts, leaving room for the transition", () => {
   const b = BC.wordBudgets(BC.DEFAULTS);
   // longest default transition ("On the other hand,") is 4 words
-  assert.deepEqual(b, { word_limit: 50, ack_words: 0, question_words: 9, point_words: 18 });
+  assert.deepEqual(b, { word_limit: 50, ack_words: 0, question_words: 9, point_words: 18, soft_words: 9 });
   assert.ok(2 * b.point_words + b.question_words + 4 <= 50);
   const sys = BC.buildSystemPrompt(BC.DEFAULTS, { topic: "T", p_response: "R" });
   assert.doesNotMatch(sys, /\{(ack|point|question)_words\}/);
@@ -280,4 +280,44 @@ test("proxy { error } message is kept and reported via onRequestError", async ()
   assert.equal(log.error_0, "HTTP 502: The model `x` does not exist");
   assert.deepEqual(reported, [[0, "HTTP 502: The model `x` does not exist"]]);
   assert.equal(log.response_0, BC.DEFAULTS.opening_fallback);
+});
+
+// ---------- following a participant who shifts ----------
+test("stance is parsed and normalized; it is optional", () => {
+  assert.equal(BC.parseBalancedReply('{"stance":"Shifted","support":"a","dissent":"b"}').parts.stance, "shifted");
+  assert.equal(BC.parseBalancedReply('{"stance":"weird","support":"a","dissent":"b"}').parts.stance, "");
+  const noStance = BC.parseBalancedReply('{"support":"a","dissent":"b"}');
+  assert.equal(noStance.ok, true);
+  assert.equal(noStance.parts.stance, "");
+  assert.equal(BC.hasShifted({ stance: "mixed" }), true);
+  assert.equal(BC.hasShifted({ stance: "original" }), false);
+});
+
+test("prompt tells the bot to follow a shift and fills the soft counterpoint budget", () => {
+  const sys = BC.buildSystemPrompt(BC.DEFAULTS, { topic: "T", p_response: "R" });
+  assert.match(sys, /Follow the participant/);
+  assert.match(sys, /at most 9 words\)/);
+  assert.match(sys, /\{"stance":"","support":"","dissent":"","question":""\}/);
+  assert.doesNotMatch(sys, /\{soft_words\}/);
+  assert.equal(BC.wordBudgets(BC.DEFAULTS).soft_words, 9);
+});
+
+test("after a shift, the new-leaning point comes first even when order is dissent-first; stance is logged", async () => {
+  const shifted = JSON.stringify({ stance: "shifted", support: "new side point.", dissent: "old side note.", question: "" });
+  const original = JSON.stringify({ stance: "original", support: "for you.", dissent: "against you.", question: "" });
+  const t = setup([original, shifted], { order: "dissent-first" });
+  await t.chat.start();
+  await t.say("ok you're right");
+  assert.equal(t.log.stance_0, "original");
+  assert.equal(t.log.order_0, "dissent-first");
+  assert.match(t.log.response_0, /^Against you\./);
+  assert.equal(t.log.stance_1, "shifted");
+  assert.equal(t.log.order_1, "support-first");
+  assert.match(t.log.response_1, /^New side point\. \S.* old side note\.$/);
+});
+
+test("trimming keeps the stance", () => {
+  const out = BC.trimToLimit({ stance: "shifted", support: "a b c", dissent: "d e f", question: "g h i j" }, 7, 0);
+  assert.equal(out.stance, "shifted");
+  assert.equal(out.question, "");
 });

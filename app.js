@@ -4,7 +4,7 @@
 
   var PAGE = window.PAGE_CONFIG || {};
   var MOCK = /[?&]mock=1\b/.test(location.search);
-  var SETTINGS_KEY = "balancedChat.settings.v4"; // v4: no acknowledgment part
+  var SETTINGS_KEY = "balancedChat.settings.v5"; // v5: stance / follow-the-participant prompt
 
   var TOPICS = [
     "People in romantic relationships should not have opposite-sex friendships.",
@@ -232,6 +232,7 @@
     session.records[record.turn] = record;
     if (record.user) addTranscriptEntry("You", record.user);
     var meta = record.words + " words" + (record.over_limit ? " (over limit)" : "") +
+      (record.stance === "shifted" ? " \u00B7 participant shifted" : record.stance === "mixed" ? " \u00B7 participant mixed" : "") +
       (record.parse_ok ? "" : " \u00B7 not in the balanced format");
     addTranscriptEntry("Bot", record.shown, meta);
   }
@@ -256,6 +257,7 @@
           dissent: r.parts ? r.parts.dissent : "",
           order: r.order,
           transition: r.transition,
+          stance: r.stance,
           parse_ok: r.parse_ok,
           words: r.words,
           over_limit: r.over_limit
@@ -285,7 +287,7 @@
     rep.turns.forEach(function (t) {
       lines.push("", "--- " + (t.turn === 0 ? "Opening reply" : "Turn " + t.turn) + " ---");
       if (t.participant) lines.push("Participant: " + t.participant);
-      lines.push("Bot (" + t.words + " words, " + (t.parse_ok ? t.order + ', "' + t.transition + '"' : "NOT balanced format") + "): " + t.bot_shown);
+      lines.push("Bot (" + t.words + " words, " + (t.parse_ok ? (t.stance || "?") + ", " + t.order + ', "' + t.transition + '"' : "NOT balanced format") + "): " + t.bot_shown);
     });
     if (rep.final_message) lines.push("", "Participant (final, no reply by design): " + rep.final_message);
     if (rep.errors.length) lines.push("", "ERRORS:", rep.errors.join("\n"));
@@ -365,7 +367,8 @@
   });
 
   // ---------- mock proxy (?mock=1) ----------
-  // Type FAIL in a message to simulate a network error, BADJSON for an unparseable reply.
+  // Type FAIL in a message to simulate a network error, BADJSON for an unparseable reply,
+  // "you're right" for a participant who has shifted to the other side.
   var mockCount = 0;
   function mockFetch(url, init) {
     var body = JSON.parse(init.body);
@@ -377,6 +380,7 @@
         var text = /BADJSON/.test(body.prompt)
           ? "Sorry, here is plain text instead of JSON."
           : JSON.stringify({
+              stance: /you'?re right/i.test(body.prompt) ? "shifted" : "original",
               support: "a mock supporting point (#" + mockCount + ") you didn't mention.",
               dissent: "a mock dissenting point (#" + mockCount + ") to consider.",
               question: "What do you think?"
