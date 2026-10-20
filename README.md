@@ -2,12 +2,11 @@
 
 This is a test page for a **balanced ("even-handed") chatbot arm** for the AI Interaction study (validating / critical / control). The idea comes from the selective exposure literature on even-handed information search. In every turn, the bot:
 
-1. acknowledges the participant's view without taking sides;
-2. gives **one supporting point** the participant didn't mention;
-3. gives **one dissenting point** of about equal strength;
-4. optionally asks a follow-up question.
+1. gives **one supporting point** the participant didn't mention;
+2. gives **one dissenting point** of about equal strength;
+3. optionally asks a follow-up question.
 
-The model answers in JSON (`acknowledge`, `support`, `dissent`, `question`). That way the 1:1 balance can be checked on every turn, the parts can be shown in a fixed order, and each part is logged separately for analysis.
+The model answers in JSON (`support`, `dissent`, `question`). That way the 1:1 balance can be checked on every turn, the parts can be shown in a fixed order, and each part is logged separately for analysis.
 
 ## Using the page
 Open the GitHub Pages URL; mock mode is described further down.

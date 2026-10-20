@@ -1,7 +1,7 @@
 /*
  * Balanced ("even-handed") chatbot engine.
  *
- * Every bot turn = acknowledge + ONE supporting point + ONE dissenting point
+ * Every bot turn = ONE supporting point + ONE dissenting point
  * (+ optional question). The model is asked for JSON so the 1:1 balance can be
  * checked, rendered in a fixed order, and logged piece by piece.
  *
@@ -15,18 +15,18 @@ var BalancedChat = (function () {
   var DEFAULT_PROMPT = [
     'You are discussing the topic "{topic}" with a participant. Their reasoning: "{p_response}".',
     "Your goal is to make their information search balanced. Every reply must contain these fields:",
-    "(1) acknowledge: one short sentence showing you understand their point, without agreeing or disagreeing;",
-    "(2) support: ONE concrete piece of evidence or argument that SUPPORTS their position and that they have NOT already mentioned;",
-    "(3) dissent: ONE concrete piece of evidence or argument that CHALLENGES their position, about as strong and specific as the support;",
-    "(4) question: an optional short follow-up question (may be empty).",
+    "(1) support: ONE concrete piece of evidence or argument that SUPPORTS their position and that they have NOT already mentioned;",
+    "(2) dissent: ONE concrete piece of evidence or argument that CHALLENGES their position, about as strong and specific as the support;",
+    "(3) question: an optional short follow-up question (may be empty).",
     "Write support and dissent as plain statements with no lead-in or transition word (no \"However\", \"On the other hand\", \"One point in your favor\"); a transition is added for you.",
     "Start support and dissent with a lowercase letter unless the first word is a proper noun or \"I\".",
     "Never reuse evidence from earlier turns. Vary your wording, and don't open every reply the same way. Stay neutral; never say which side is right.",
-    "STRICT word budget: acknowledge at most {ack_words} words, support at most {point_words}, dissent at most {point_words}, question at most {question_words}; the whole reply must stay under {word_limit} words. Count before answering; replies over the limit are rejected.",
-    'Respond ONLY with JSON: {"acknowledge":"","support":"","dissent":"","question":""}',
+    "STRICT word budget: support at most {point_words}, dissent at most {point_words}, question at most {question_words}; the whole reply must stay under {word_limit} words. Count before answering; replies over the limit are rejected.",
+    'Respond ONLY with JSON: {"support":"","dissent":"","question":""}',
+    "Go straight to the evidence: no greeting, no restating or acknowledging their view.",
     "",
     'Example (topic: Is Michael Jordan the GOAT? Participant: "Yes, he was the most dominant player ever."):',
-    '{"acknowledge":"His dominance is hard to ignore.","support":"he went 6-0 in the Finals and won 6 Finals MVPs.","dissent":"LeBron has more career points and a far longer prime.","question":"How much should longevity count?"}'
+    '{"support":"he went 6-0 in the Finals and won 6 Finals MVPs.","dissent":"LeBron has more career points and a far longer prime.","question":"How much should longevity count?"}'
   ].join("\n");
 
   var DEFAULT_OPENING_PROMPT =
@@ -48,7 +48,7 @@ var BalancedChat = (function () {
     prompt_template: DEFAULT_PROMPT,
     opening_template: DEFAULT_OPENING_PROMPT,
     // If a reply is over word_limit: ask for one shorter rewrite, then drop the
-    // question and then the acknowledgment if it is still too long.
+    // question if it is still too long.
     enforce_word_limit: true,
     // Placed before the second point; one is picked at random each turn (never the
     // same one twice in a row). One per line.
@@ -70,17 +70,17 @@ var BalancedChat = (function () {
   }
 
   // Per-part budgets that add up to the limit, leaving room for the transition
-  // phrase the page inserts. word_limit 50 -> ack 9, support 14, dissent 14, question 9.
+  // phrase the page inserts. word_limit 50 -> support 19, dissent 19, question 9.
+  // ack_words stays 0 so older custom prompts that still use {ack_words} don't break.
   function wordBudgets(cfg) {
     var limit = parseInt(cfg.word_limit, 10) || 50;
     var room = Math.max(limit - transitionAllowance(cfg), 8);
-    var ack = Math.floor(room * 0.2);
     var question = Math.floor(room * 0.2);
     return {
       word_limit: limit,
-      ack_words: ack,
+      ack_words: 0,
       question_words: question,
-      point_words: Math.floor((room - ack - question) / 2)
+      point_words: Math.floor((room - question) / 2)
     };
   }
 
@@ -129,7 +129,6 @@ var BalancedChat = (function () {
       return { ok: false, parts: null, raw: raw };
     }
     var parts = {
-      acknowledge: asText(obj.acknowledge),
       support: asText(obj.support),
       dissent: asText(obj.dissent),
       question: asText(obj.question)
@@ -176,12 +175,12 @@ var BalancedChat = (function () {
     return sentence.charAt(0).toUpperCase() + sentence.slice(1);
   }
 
-  // "{acknowledge} {first point} {transition} {second point} {question}"
+  // "{first point} {transition} {second point} {question}"
   function renderReply(parts, order, transition) {
     var first = order === "dissent-first" ? parts.dissent : parts.support;
     var second = order === "dissent-first" ? parts.support : parts.dissent;
     second = transition ? transition + " " + lowerFirst(second) : upperFirst(second);
-    return [parts.acknowledge, upperFirst(first), second, parts.question]
+    return [upperFirst(first), second, parts.question]
       .filter(function (s) { return s; })
       .join(" ");
   }
@@ -198,16 +197,14 @@ var BalancedChat = (function () {
   }
 
   function partsWords(parts) {
-    return countWords(parts.acknowledge) + countWords(parts.support) +
-      countWords(parts.dissent) + countWords(parts.question);
+    return countWords(parts.support) + countWords(parts.dissent) + countWords(parts.question);
   }
 
-  // Last resort for a reply that is still too long: drop the question, then the
-  // acknowledgment. The supporting and dissenting points are never cut.
+  // Last resort for a reply that is still too long: drop the question. The
+  // supporting and dissenting points are never cut.
   function trimToLimit(parts, limit, allowance) {
-    var out = { acknowledge: parts.acknowledge, support: parts.support, dissent: parts.dissent, question: parts.question };
+    var out = { support: parts.support, dissent: parts.dissent, question: parts.question };
     if (partsWords(out) + allowance > limit) out.question = "";
-    if (partsWords(out) + allowance > limit) out.acknowledge = "";
     return out;
   }
 
@@ -329,7 +326,7 @@ var BalancedChat = (function () {
       );
       var rewritePrompt =
         "That reply was about " + words + " words; the limit is " + limit + ". Rewrite the SAME reply shorter: " +
-        "acknowledge at most " + b.ack_words + " words, support at most " + b.point_words +
+        "support at most " + b.point_words +
         ", dissent at most " + b.point_words + ", question at most " + b.question_words +
         ". Keep one supporting and one dissenting point. Respond ONLY with the JSON.";
       logError(turn, "over word limit (" + words + "), asked for rewrite");
@@ -337,7 +334,7 @@ var BalancedChat = (function () {
       function trimmed(p) {
         var parts = trimToLimit(p.parts, limit, allowance);
         if (partsWords(parts) + allowance > limit) logError(turn, "still over word limit after trimming");
-        else if (parts.question !== p.parts.question || parts.acknowledge !== p.parts.acknowledge) {
+        else if (parts.question !== p.parts.question) {
           logError(turn, "trimmed to fit word limit");
         }
         return { ok: true, parts: parts, raw: p.raw };

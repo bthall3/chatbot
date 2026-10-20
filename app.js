@@ -4,7 +4,7 @@
 
   var PAGE = window.PAGE_CONFIG || {};
   var MOCK = /[?&]mock=1\b/.test(location.search);
-  var SETTINGS_KEY = "balancedChat.settings.v3"; // v3: per-part word budgets in the prompt
+  var SETTINGS_KEY = "balancedChat.settings.v4"; // v4: no acknowledgment part
 
   var TOPICS = [
     "People in romantic relationships should not have opposite-sex friendships.",
@@ -377,7 +377,6 @@
         var text = /BADJSON/.test(body.prompt)
           ? "Sorry, here is plain text instead of JSON."
           : JSON.stringify({
-              acknowledge: "I see why that matters to you.",
               support: "a mock supporting point (#" + mockCount + ") you didn't mention.",
               dissent: "a mock dissenting point (#" + mockCount + ") to consider.",
               question: "What do you think?"

@@ -55,7 +55,6 @@ function setup(replies, cfg = {}) {
 }
 
 const good = (n) => JSON.stringify({
-  acknowledge: "I see your point.",
   support: "Support " + n + ".",
   dissent: "Dissent " + n + ".",
   question: "Thoughts?"
@@ -73,22 +72,22 @@ test("parseBalancedReply accepts clean, fenced and prose-wrapped JSON", () => {
 test("parseBalancedReply rejects non-JSON and replies missing support or dissent", () => {
   assert.equal(BC.parseBalancedReply("plain text").ok, false);
   assert.equal(BC.parseBalancedReply("{not json}").ok, false);
-  assert.equal(BC.parseBalancedReply('{"acknowledge":"x","support":"y","dissent":""}').ok, false);
+  assert.equal(BC.parseBalancedReply('{"support":"y","dissent":""}').ok, false);
   assert.equal(BC.parseBalancedReply(undefined).ok, false);
 });
 
 test("renderReply: no labels, transition before the second point", () => {
-  const parts = { acknowledge: "Ack.", support: "he won 6 titles.", dissent: "LeBron lasted longer.", question: "Q?" };
+  const parts = { support: "he won 6 titles.", dissent: "LeBron lasted longer.", question: "Q?" };
   assert.equal(BC.renderReply(parts, "support-first", "However,"),
-    "Ack. He won 6 titles. However, LeBron lasted longer. Q?");
+    "He won 6 titles. However, LeBron lasted longer. Q?");
   assert.equal(BC.renderReply(parts, "dissent-first", "That said,"),
-    "Ack. LeBron lasted longer. That said, he won 6 titles. Q?");
+    "LeBron lasted longer. That said, he won 6 titles. Q?");
   assert.equal(BC.renderReply(Object.assign({}, parts, { question: "" }), "support-first", "Still,"),
-    "Ack. He won 6 titles. Still, LeBron lasted longer.");
+    "He won 6 titles. Still, LeBron lasted longer.");
 });
 
 test("renderReply lowercases common words after a transition but keeps proper nouns and acronyms", () => {
-  const mk = (dissent) => BC.renderReply({ acknowledge: "", support: "x.", dissent, question: "" }, "support-first", "Yet");
+  const mk = (dissent) => BC.renderReply({ support: "x.", dissent, question: "" }, "support-first", "Yet");
   assert.equal(mk("Many couples disagree."), "X. Yet many couples disagree.");
   assert.equal(mk("Research shows otherwise."), "X. Yet research shows otherwise.");
   assert.equal(mk("Pew surveys say otherwise."), "X. Yet Pew surveys say otherwise.");
@@ -116,7 +115,8 @@ test("buildSystemPrompt fills placeholders but leaves JSON braces alone", () => 
   assert.match(sys, /topic "T"/);
   assert.match(sys, /"line1 line2"/);
   assert.match(sys, /under 50 words/);
-  assert.match(sys, /\{"acknowledge":"","support":"","dissent":"","question":""\}/);
+  assert.match(sys, /\{"support":"","dissent":"","question":""\}/);
+  assert.doesNotMatch(sys, /acknowledge:/);
   assert.doesNotMatch(sys, /\{topic\}|\{p_response\}|\{word_limit\}/);
 });
 
@@ -130,7 +130,7 @@ test("opening turn is a balanced reply and is logged as response_0", async () =>
   assert.equal(t.calls[0].model, "gpt-5.6-luna");
   assert.equal(t.calls[0].reasoning_effort, "none");
   assert.equal(BC.DEFAULTS.proxy_url, "https://balanced-chat-proxy.bthall3.workers.dev/");
-  assert.match(t.log.response_0, /^I see your point\. Support 0\. \S.* Dissent 0\. Thoughts\?$/);
+  assert.match(t.log.response_0, /^Support 0\. \S.* Dissent 0\. Thoughts\?$/);
   assert.ok(BC.parseTransitions(BC.DEFAULTS.transitions).some((x) => t.log.response_0.includes(x + " ")));
   assert.ok(t.log.transition_0);
   assert.equal(t.log.support_0, "Support 0.");
@@ -221,11 +221,12 @@ const reply = (ack, sup, dis, q) => JSON.stringify({
 
 test("wordBudgets split the limit across parts, leaving room for the transition", () => {
   const b = BC.wordBudgets(BC.DEFAULTS);
-  assert.deepEqual(b, { word_limit: 50, ack_words: 9, question_words: 9, point_words: 14 });
-  assert.ok(b.ack_words + 2 * b.point_words + b.question_words + 3 <= 50);
+  // longest default transition ("On the other hand,") is 4 words
+  assert.deepEqual(b, { word_limit: 50, ack_words: 0, question_words: 9, point_words: 18 });
+  assert.ok(2 * b.point_words + b.question_words + 4 <= 50);
   const sys = BC.buildSystemPrompt(BC.DEFAULTS, { topic: "T", p_response: "R" });
-  assert.match(sys, /support at most 14/);
   assert.doesNotMatch(sys, /\{(ack|point|question)_words\}/);
+  assert.match(sys, /support at most 18/);
 });
 
 test("over-limit reply: asks once for a rewrite and uses the shorter one", async () => {
@@ -238,19 +239,22 @@ test("over-limit reply: asks once for a rewrite and uses the shorter one", async
   assert.match(t.log.error_0, /asked for rewrite/);
 });
 
-test("still over after rewrite: drops the question, then the acknowledgment, never the points", async () => {
-  const t = setup([reply(10, 20, 20, 10), reply(10, 20, 20, 10)], { word_limit: 50 });
+test("still over after rewrite: drops the question, never the points", async () => {
+  const t = setup([reply(0, 20, 20, 10), reply(0, 20, 20, 10)], { word_limit: 50 });
   await t.chat.start();
   const r = t.chat.state.records[0];
   assert.equal(r.parts.question, "");
-  assert.equal(r.parts.acknowledge, "");
   assert.equal(r.parts.support, words(20, "sup"));
   assert.equal(r.parts.dissent, words(20, "dis"));
   assert.ok(r.words <= 50);
-  const t2 = setup([reply(5, 18, 18, 10), reply(5, 18, 18, 10)], { word_limit: 50 });
-  await t2.chat.start();
-  assert.equal(t2.chat.state.records[0].parts.question, "");
-  assert.equal(t2.chat.state.records[0].parts.acknowledge, words(5, "ack"));
+  assert.match(t.log.error_0, /trimmed/);
+});
+
+test("an acknowledgment the model adds anyway is not shown or counted", async () => {
+  const t = setup([reply(8, 5, 5, 3)]);
+  await t.chat.start();
+  assert.doesNotMatch(t.log.response_0, /ack/);
+  assert.equal(t.chat.state.records[0].parts.acknowledge, undefined);
 });
 
 test("enforce_word_limit off: long replies pass through with no extra call", async () => {
