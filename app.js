@@ -20,7 +20,7 @@
   var OTHER = "__other__";
 
   var EDITABLE = [
-    "prompt_template", "opening_template", "model", "temperature", "max_tokens", "word_limit",
+    "prompt_template", "opening_template", "proxy_url", "model", "reasoning_effort", "temperature", "max_tokens", "word_limit",
     "max_messages", "delay_ms_per_word", "order", "label_support_first", "label_dissent_first", "label_second"
   ];
   var NUMERIC = { temperature: 1, max_tokens: 1, word_limit: 1, max_messages: 1, delay_ms_per_word: 1 };

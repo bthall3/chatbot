@@ -29,10 +29,9 @@ Add `?mock=1` to the URL to test the page without calling the API:
    - Go to repo **Settings → Pages → Build and deployment → Deploy from a branch**.
    - Choose the branch that holds these files (`main` after merging), folder `/ (root)`.
    - The page will be at `https://bthall3.github.io/chatbot/`.
-3. **Proxy check:** this couldn't be tested from the build environment. Open the live page and start a conversation.
-   - If the first reply never appears, open the browser console (F12).
-   - A **CORS** error means the `openai-api-proxy` worker has to allow the origin `https://bthall3.github.io`.
-   - An API error usually means the model name. Try changing **Model** in the left panel.
+3. **Proxy:** deploy `proxy/worker.js` as a new Cloudflare Worker named `balanced-chat-proxy` (steps in [`proxy/README.md`](proxy/README.md)).
+   - The page defaults to `gpt-5.6-luna` with reasoning set to `none`. The old proxy can't run this model, because it sends `max_tokens` and `temperature`, which reasoning models reject.
+   - If the first reply never appears, open the browser console (F12). The error message says what's wrong: origin, model, or API key.
 
 ## Files
 | File | Purpose |
@@ -40,8 +39,9 @@ Add `?mock=1` to the URL to test the page without calling the API:
 | `chat-core.js` | Chat engine: prompt, proxy calls, JSON parsing, rendering, logging. No dependencies; pasted verbatim into Qualtrics. |
 | `index.html`, `styles.css`, `app.js` | Test page (settings panel, chat, feedback, email). |
 | `config.js` | Web3Forms key and email subject. |
+| `proxy/` | Cloudflare Worker that forwards chats to OpenAI (supports reasoning models), plus deploy steps. |
 | `qualtrics/` | How to add this as a 4th arm in the survey (`README.md`, `question.html`, `adapter.js`). |
-| `tests/` | Unit tests: `node --test tests/*.test.js` |
+| `tests/` | Unit tests: `node --test "tests/*.test.*"` |
 
 ## Logged fields (same names in Qualtrics)
 - `msg_N`: participant message.
@@ -55,4 +55,5 @@ Add `?mock=1` to the URL to test the page without calling the API:
 - **Third party:** feedback emails pass through Web3Forms. Fine for pilot testing; don't use it with participant data.
 - **Public page:** anyone with the URL can use the proxy, which spends API credit.
 - **Length confound:** about 50 words per reply here versus 30 in the launched arms.
+- **Model shutdown:** `gpt-4.1-nano`, the model used by the launched arms, is scheduled to shut down on Oct 23, 2026, per OpenAI's deprecations page.
 - **Accuracy:** the "evidence" comes from a small model and can be wrong or made up. The "good point?" ratings are there to catch this during piloting.

@@ -1,4 +1,4 @@
-// Run with: node --test tests/
+// Run with: node --test "tests/*.test.*"
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const BC = require("../chat-core.js");
@@ -110,7 +110,8 @@ test("opening turn is a balanced reply and is logged as response_0", async () =>
   assert.equal(t.calls.length, 1);
   assert.deepEqual(t.calls[0].history, []);
   assert.match(t.calls[0].prompt, /He was dominant\./);
-  assert.equal(t.calls[0].model, "gpt-4.1-nano");
+  assert.equal(t.calls[0].model, "gpt-5.6-luna");
+  assert.equal(t.calls[0].reasoning_effort, "none");
   assert.match(t.log.response_0, /One point in your favor: Support 0\./);
   assert.equal(t.log.support_0, "Support 0.");
   assert.equal(t.log.parse_ok_0, "1");

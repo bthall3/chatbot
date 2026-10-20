@@ -1,0 +1,8 @@
+name = "balanced-chat-proxy"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+ALLOWED_ORIGINS = "https://bthall3.github.io,https://*.qualtrics.com,http://localhost:*"
+ALLOWED_MODELS = "gpt-5.6-luna"
+# OPENAI_API_KEY is a secret: npx wrangler secret put OPENAI_API_KEY

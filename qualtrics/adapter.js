@@ -19,7 +19,8 @@ Qualtrics.SurveyEngine.addOnReady(function () {
   // Copy any settings you changed on the test page here. Anything left out uses
   // BalancedChat.DEFAULTS (model, prompt_template, word_limit, ...).
   // Set them here, not via embedded data: the launched flow's "GPT-4.1 nano"
-  // model value is not a valid model ID.
+  // value is not a valid model ID, and gpt-4.1-nano shuts down Oct 23, 2026.
+  // Requires the balanced-chat-proxy worker (proxy/README.md).
   var cfg = {
     max_messages: 5
   };

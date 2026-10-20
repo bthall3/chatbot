@@ -25,6 +25,13 @@
 
         <div class="grid2">
           <label>Model <input name="model" type="text"></label>
+          <label>Reasoning
+            <select name="reasoning_effort">
+              <option value="none">none (fast)</option>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+            </select>
+          </label>
           <label>Temperature <input name="temperature" type="number" min="0" max="2" step="0.1"></label>
           <label>Max tokens <input name="max_tokens" type="number" min="50" step="10"></label>
           <label>Word limit <input name="word_limit" type="number" min="10" step="5"></label>
@@ -41,6 +48,7 @@
 
         <details>
           <summary>Advanced</summary>
+          <label>Proxy URL <input name="proxy_url" type="url"></label>
           <label>Opening-turn instruction <textarea name="opening_template" rows="4" spellcheck="false"></textarea></label>
           <label>Label when support comes first <input name="label_support_first" type="text"></label>
           <label>Label when dissent comes first <input name="label_dissent_first" type="text"></label>

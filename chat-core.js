@@ -32,8 +32,9 @@ var BalancedChat = (function () {
     "Start the conversation with your first reply in the required JSON format.";
 
   var DEFAULTS = {
-    proxy_url: "https://openai-api-proxy.hallbradent.workers.dev/",
-    model: "gpt-4.1-nano",
+    proxy_url: "https://balanced-chat-proxy.hallbradent.workers.dev/",
+    model: "gpt-5.6-luna",
+    reasoning_effort: "none", // reasoning models: "none" keeps replies fast and allows temperature
     temperature: 0.5,
     max_tokens: 200,
     word_limit: 50,
@@ -76,7 +77,7 @@ var BalancedChat = (function () {
     });
   }
 
-  // Same body shape the launched Qualtrics arms send to the proxy.
+  // Same body shape the launched Qualtrics arms send to the proxy, plus reasoning_effort.
   function buildRequest(cfg, system, history, prompt) {
     return {
       prompt: prompt,
@@ -84,7 +85,8 @@ var BalancedChat = (function () {
       history: history,
       model: cfg.model,
       temperature: Number(cfg.temperature),
-      max_tokens: parseInt(cfg.max_tokens, 10)
+      max_tokens: parseInt(cfg.max_tokens, 10),
+      reasoning_effort: cfg.reasoning_effort
     };
   }
 
