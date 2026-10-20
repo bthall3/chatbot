@@ -7,7 +7,7 @@ In a new block (for example "Balanced chatbot"), add the same intro text questio
 
 - **HTML view:** paste `qualtrics/question.html`.
 - **JavaScript:** delete the default stub, paste **all of `chat-core.js`**, then paste **`qualtrics/adapter.js`** below it.
-- In `adapter.js`, copy into `cfg` any settings you changed on the test page (prompt, word limit, order, labels, and so on). To copy a long prompt, the "Prompt actually sent" box shows the filled-in version; you want the *template* from the System prompt box. Set `prompt_template` to it as a JS string, with line breaks written as `\n`.
+- In `adapter.js`, copy into `cfg` any settings you changed on the test page (prompt, word limit, order, transitions, and so on). To copy a long prompt, the "Prompt actually sent" box shows the filled-in version; you want the *template* from the System prompt box. Set `prompt_template` to it as a JS string, with line breaks written as `\n`.
 
 The existing custom CSS (`#chat-container`, `.bot-message`, …) already styles it. Optionally add:
 
@@ -23,7 +23,7 @@ The existing custom CSS (`#chat-container`, `.bot-message`, …) already styles 
 - Declare these fields in an Embedded Data element **before** the randomizer, with no value, so `setEmbeddedData` saves them:
   - `msg_1` … `msg_5`, `response_0` … `response_4` (already declared for the other arms)
   - `support_0` … `support_4`, `dissent_0` … `dissent_4`
-  - `order_0` … `order_4`, `parse_ok_0` … `parse_ok_4`, `error_0` … `error_4`
+  - `order_0` … `order_4`, `transition_0` … `transition_4`, `parse_ok_0` … `parse_ok_4`, `error_0` … `error_4`
 
   With `max_messages = 5`, the 5th participant message gets no reply by design, so `response_5` stays empty.
 

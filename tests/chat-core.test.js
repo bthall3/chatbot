@@ -77,14 +77,31 @@ test("parseBalancedReply rejects non-JSON and replies missing support or dissent
   assert.equal(BC.parseBalancedReply(undefined).ok, false);
 });
 
-test("renderReply puts points in the requested order with labels", () => {
-  const parts = { acknowledge: "Ack.", support: "S.", dissent: "D.", question: "Q?" };
-  assert.equal(BC.renderReply(parts, "support-first"),
-    "Ack. One point in your favor: S. On the other hand: D. Q?");
-  assert.equal(BC.renderReply(parts, "dissent-first"),
-    "Ack. One point against your view: D. On the other hand: S. Q?");
-  assert.equal(BC.renderReply(Object.assign({}, parts, { question: "" }), "support-first"),
-    "Ack. One point in your favor: S. On the other hand: D.");
+test("renderReply: no labels, transition before the second point", () => {
+  const parts = { acknowledge: "Ack.", support: "he won 6 titles.", dissent: "LeBron lasted longer.", question: "Q?" };
+  assert.equal(BC.renderReply(parts, "support-first", "However,"),
+    "Ack. He won 6 titles. However, LeBron lasted longer. Q?");
+  assert.equal(BC.renderReply(parts, "dissent-first", "That said,"),
+    "Ack. LeBron lasted longer. That said, he won 6 titles. Q?");
+  assert.equal(BC.renderReply(Object.assign({}, parts, { question: "" }), "support-first", "Still,"),
+    "Ack. He won 6 titles. Still, LeBron lasted longer.");
+});
+
+test("renderReply lowercases common words after a transition but keeps proper nouns and acronyms", () => {
+  const mk = (dissent) => BC.renderReply({ acknowledge: "", support: "x.", dissent, question: "" }, "support-first", "Yet");
+  assert.equal(mk("Many couples disagree."), "X. Yet many couples disagree.");
+  assert.equal(mk("Research shows otherwise."), "X. Yet research shows otherwise.");
+  assert.equal(mk("Pew surveys say otherwise."), "X. Yet Pew surveys say otherwise.");
+  assert.equal(mk("I would add this."), "X. Yet I would add this.");
+  assert.equal(mk("US data differ."), "X. Yet US data differ.");
+});
+
+test("pickTransition never repeats the previous phrase", () => {
+  const list = BC.parseTransitions("However,\nThat said,\n\n  Still,  ");
+  assert.deepEqual(list, ["However,", "That said,", "Still,"]);
+  for (let i = 0; i < 50; i++) assert.notEqual(BC.pickTransition(list, "However,"), "However,");
+  assert.equal(BC.pickTransition(["Only,"], "Only,"), "Only,");
+  assert.equal(BC.pickTransition([], ""), "");
 });
 
 test("resolveOrder: fixed orders pass through, random uses the rng", () => {
@@ -113,7 +130,9 @@ test("opening turn is a balanced reply and is logged as response_0", async () =>
   assert.equal(t.calls[0].model, "gpt-5.6-luna");
   assert.equal(t.calls[0].reasoning_effort, "none");
   assert.equal(BC.DEFAULTS.proxy_url, "https://balanced-chat-proxy.bthall3.workers.dev/");
-  assert.match(t.log.response_0, /One point in your favor: Support 0\./);
+  assert.match(t.log.response_0, /^I see your point\. Support 0\. \S.* Dissent 0\. Thoughts\?$/);
+  assert.ok(BC.parseTransitions(BC.DEFAULTS.transitions).some((x) => t.log.response_0.includes(x + " ")));
+  assert.ok(t.log.transition_0);
   assert.equal(t.log.support_0, "Support 0.");
   assert.equal(t.log.parse_ok_0, "1");
   assert.equal(t.dom.input.disabled, false);

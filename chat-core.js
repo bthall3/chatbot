@@ -19,12 +19,14 @@ var BalancedChat = (function () {
     "(2) support: ONE concrete piece of evidence or argument that SUPPORTS their position and that they have NOT already mentioned;",
     "(3) dissent: ONE concrete piece of evidence or argument that CHALLENGES their position, about as strong and specific as the support;",
     "(4) question: an optional short follow-up question (may be empty).",
-    "Never reuse evidence from earlier turns. Stay neutral; never say which side is right.",
+    "Write support and dissent as plain statements with no lead-in or transition word (no \"However\", \"On the other hand\", \"One point in your favor\"); a transition is added for you.",
+    "Start support and dissent with a lowercase letter unless the first word is a proper noun or \"I\".",
+    "Never reuse evidence from earlier turns. Vary your wording, and don't open every reply the same way. Stay neutral; never say which side is right.",
     "Keep the whole reply under {word_limit} words.",
     'Respond ONLY with JSON: {"acknowledge":"","support":"","dissent":"","question":""}',
     "",
     'Example (topic: Is Michael Jordan the GOAT? Participant: "Yes, he was the most dominant player ever."):',
-    '{"acknowledge":"I see why his dominance stands out.","support":"He went 6-0 in the Finals and won 6 Finals MVPs.","dissent":"LeBron has more career points and a far longer prime.","question":"How much should longevity count?"}'
+    '{"acknowledge":"His dominance is hard to ignore.","support":"he went 6-0 in the Finals and won 6 Finals MVPs.","dissent":"LeBron has more career points and a far longer prime.","question":"How much should longevity count?"}'
   ].join("\n");
 
   var DEFAULT_OPENING_PROMPT =
@@ -45,9 +47,12 @@ var BalancedChat = (function () {
     request_timeout_ms: 20000,
     prompt_template: DEFAULT_PROMPT,
     opening_template: DEFAULT_OPENING_PROMPT,
-    label_support_first: "One point in your favor:",
-    label_dissent_first: "One point against your view:",
-    label_second: "On the other hand:",
+    // Placed before the second point; one is picked at random each turn (never the
+    // same one twice in a row). One per line.
+    transitions: [
+      "However,", "That said,", "On the other hand,", "Then again,", "At the same time,",
+      "Still,", "Even so,", "But", "Yet", "On the flip side,", "Conversely,", "Of course,"
+    ].join("\n"),
     closing_message: "Thank you for the conversation! We will now move on to the next part of the study.",
     error_message: "Sorry, something went wrong. Please send your message again.",
     opening_fallback: "Thanks for sharing your view. What would you like to discuss about this topic?"
@@ -121,13 +126,45 @@ var BalancedChat = (function () {
     return order === "dissent-first" ? "dissent-first" : "support-first";
   }
 
-  function renderReply(parts, order, cfg) {
-    var c = cfg || DEFAULTS;
-    var middle =
-      order === "dissent-first"
-        ? [c.label_dissent_first, parts.dissent, c.label_second, parts.support]
-        : [c.label_support_first, parts.support, c.label_second, parts.dissent];
-    return [parts.acknowledge].concat(middle, [parts.question])
+  function parseTransitions(text) {
+    return String(text || "").split(/\n/).map(function (t) { return t.trim(); }).filter(Boolean);
+  }
+
+  // Random transition, avoiding an immediate repeat.
+  function pickTransition(list, previous, rand) {
+    if (!list.length) return "";
+    var options = list.length > 1 ? list.filter(function (t) { return t !== previous; }) : list;
+    return options[Math.floor((rand || Math.random)() * options.length)];
+  }
+
+  // Backstop for when the model capitalizes anyway ("However, Many couples..."):
+  // lowercase common words only, so proper nouns ("However, LeBron...") stay intact.
+  var COMMON_FIRST_WORDS = (
+    "a an the this that these those it its there they their he she his her you your we our " +
+    "many some most few several more less much each every both all any one another other others " +
+    "people couples partners research studies study surveys data evidence experts critics " +
+    "having being sharing keeping living not no even when if while without for in on at by with " +
+    "financial religious separate shared constant trust privacy relationships"
+  ).split(" ");
+
+  function lowerFirst(sentence) {
+    var m = /^([A-Za-z']+)/.exec(sentence);
+    if (m && COMMON_FIRST_WORDS.indexOf(m[1].toLowerCase()) !== -1 && m[1] !== m[1].toUpperCase()) {
+      return sentence.charAt(0).toLowerCase() + sentence.slice(1);
+    }
+    return sentence;
+  }
+
+  function upperFirst(sentence) {
+    return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+  }
+
+  // "{acknowledge} {first point} {transition} {second point} {question}"
+  function renderReply(parts, order, transition) {
+    var first = order === "dissent-first" ? parts.dissent : parts.support;
+    var second = order === "dissent-first" ? parts.support : parts.dissent;
+    second = transition ? transition + " " + lowerFirst(second) : upperFirst(second);
+    return [parts.acknowledge, upperFirst(first), second, parts.question]
       .filter(function (s) { return s; })
       .join(" ");
   }
@@ -163,7 +200,7 @@ var BalancedChat = (function () {
     var maxMessages = parseInt(cfg.max_messages, 10);
 
     var system = buildSystemPrompt(cfg, vars);
-    var state = { history: [], turn: 0, busy: false, done: false, stopped: false, records: [], errors: {} };
+    var state = { history: [], turn: 0, busy: false, done: false, stopped: false, records: [], errors: {}, lastTransition: "" };
     var typingEl = null;
 
     function addBubble(text, who, extraClass) {
@@ -236,7 +273,9 @@ var BalancedChat = (function () {
 
     function recordTurn(turn, userMessage, parsed) {
       var order = resolveOrder(cfg.order);
-      var shown = parsed.ok ? renderReply(parsed.parts, order, cfg) : parsed.raw.trim();
+      var transition = parsed.ok ? pickTransition(parseTransitions(cfg.transitions), state.lastTransition) : "";
+      if (transition) state.lastTransition = transition;
+      var shown = parsed.ok ? renderReply(parsed.parts, order, transition) : parsed.raw.trim();
       var record = {
         turn: turn,
         user: userMessage,
@@ -244,6 +283,7 @@ var BalancedChat = (function () {
         parts: parsed.parts,
         raw: parsed.raw,
         order: parsed.ok ? order : "",
+        transition: transition,
         parse_ok: parsed.ok ? 1 : 0,
         words: countWords(shown)
       };
@@ -252,6 +292,7 @@ var BalancedChat = (function () {
       store.set("support_" + turn, parsed.ok ? parsed.parts.support : "");
       store.set("dissent_" + turn, parsed.ok ? parsed.parts.dissent : "");
       store.set("order_" + turn, record.order);
+      store.set("transition_" + turn, transition);
       store.set("parse_ok_" + turn, String(record.parse_ok));
       state.records.push(record);
       // Keep the JSON in history so the model keeps answering in JSON.
@@ -363,6 +404,8 @@ var BalancedChat = (function () {
     buildRequest: buildRequest,
     parseBalancedReply: parseBalancedReply,
     resolveOrder: resolveOrder,
+    parseTransitions: parseTransitions,
+    pickTransition: pickTransition,
     renderReply: renderReply,
     countWords: countWords,
     createChat: createChat

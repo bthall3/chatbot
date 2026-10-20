@@ -4,7 +4,7 @@
 
   var PAGE = window.PAGE_CONFIG || {};
   var MOCK = /[?&]mock=1\b/.test(location.search);
-  var SETTINGS_KEY = "balancedChat.settings";
+  var SETTINGS_KEY = "balancedChat.settings.v2"; // v2: labels replaced by transitions
 
   var TOPICS = [
     "People in romantic relationships should not have opposite-sex friendships.",
@@ -21,7 +21,7 @@
 
   var EDITABLE = [
     "prompt_template", "opening_template", "proxy_url", "model", "reasoning_effort", "temperature", "max_tokens", "word_limit",
-    "max_messages", "delay_ms_per_word", "order", "label_support_first", "label_dissent_first", "label_second"
+    "max_messages", "delay_ms_per_word", "order", "transitions"
   ];
   var NUMERIC = { temperature: 1, max_tokens: 1, word_limit: 1, max_messages: 1, delay_ms_per_word: 1 };
 
@@ -269,6 +269,7 @@
           support: r.parts ? r.parts.support : "",
           dissent: r.parts ? r.parts.dissent : "",
           order: r.order,
+          transition: r.transition,
           parse_ok: r.parse_ok,
           words: r.words,
           rating: session.ratings[t]
@@ -298,7 +299,7 @@
     rep.turns.forEach(function (t) {
       lines.push("", "--- " + (t.turn === 0 ? "Opening reply" : "Turn " + t.turn) + " ---");
       if (t.participant) lines.push("Participant: " + t.participant);
-      lines.push("Bot (" + t.words + " words, " + (t.parse_ok ? t.order : "NOT balanced format") + "): " + t.bot_shown);
+      lines.push("Bot (" + t.words + " words, " + (t.parse_ok ? t.order + ', "' + t.transition + '"' : "NOT balanced format") + "): " + t.bot_shown);
       lines.push(
         "Rating -> balanced: " + (t.rating.balanced || "-") +
         " | support: " + (t.rating.support || "-") +
@@ -395,8 +396,8 @@
           ? "Sorry, here is plain text instead of JSON."
           : JSON.stringify({
               acknowledge: "I see why that matters to you.",
-              support: "Mock supporting point #" + mockCount + " you didn't mention.",
-              dissent: "Mock dissenting point #" + mockCount + " to consider.",
+              support: "a mock supporting point (#" + mockCount + ") you didn't mention.",
+              dissent: "a mock dissenting point (#" + mockCount + ") to consider.",
               question: "What do you think?"
             });
         resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ text: text }); } });

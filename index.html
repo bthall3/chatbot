@@ -50,9 +50,10 @@
           <summary>Advanced</summary>
           <label>Proxy URL <input name="proxy_url" type="url"></label>
           <label>Opening-turn instruction <textarea name="opening_template" rows="4" spellcheck="false"></textarea></label>
-          <label>Label when support comes first <input name="label_support_first" type="text"></label>
-          <label>Label when dissent comes first <input name="label_dissent_first" type="text"></label>
-          <label>Label for the second point <input name="label_second" type="text"></label>
+          <label>Transitions before the second point
+            <small>One per line; picked at random each turn, never the same twice in a row.</small>
+            <textarea name="transitions" rows="6" spellcheck="false"></textarea>
+          </label>
         </details>
 
         <div class="row">
