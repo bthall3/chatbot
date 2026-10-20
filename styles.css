@@ -108,6 +108,8 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .card { display: flex; flex-direction: column; gap: 4px; }
 .card button { margin-top: 10px; align-self: flex-start; }
+.error-box { margin: 0 0 8px; padding: 8px 10px; border-radius: 6px; background: var(--error-bg); color: var(--text); font-size: 0.85rem; }
+.error-box code { word-break: break-word; }
 .topic-line { margin: 0 0 8px; font-size: 0.9rem; }
 #new-chat { margin-top: 10px; }
 

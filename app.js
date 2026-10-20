@@ -126,6 +126,39 @@
     $("message-input-1").value = "";
   }
 
+  // Researcher-facing explanation of a failed request (participants never see this page).
+  function explainError(message) {
+    if (/Failed to fetch|NetworkError|Load failed|aborted/i.test(message)) {
+      return "Couldn't reach the proxy. Check the Proxy URL (Advanced) matches your worker's address, that the worker is deployed, and that this site's address is in its ALLOWED_ORIGINS.";
+    }
+    if (/OPENAI_API_KEY/.test(message)) return "Add OPENAI_API_KEY as a Secret on the worker (Settings → Variables and Secrets).";
+    if (/Model not allowed/.test(message)) return "The worker's ALLOWED_MODELS doesn't include this model. Add it there, or change Model on the left.";
+    if (/model/i.test(message) && /exist|not found|invalid|access/i.test(message)) {
+      return "OpenAI doesn't recognize this model ID (or your key can't use it). Check the exact name in your OpenAI dashboard, then update Model on the left and ALLOWED_MODELS on the worker.";
+    }
+    if (/Origin not allowed|HTTP 403/.test(message)) return "The worker rejected this site. Add this page's address to ALLOWED_ORIGINS on the worker.";
+    if (/HTTP 401|api key|Incorrect API key/i.test(message)) return "OpenAI rejected the API key. Re-check the OPENAI_API_KEY secret on the worker.";
+    return "";
+  }
+
+  function showRequestError(turn, message) {
+    var box = $("chat-error");
+    box.textContent = "";
+    var strong = document.createElement("strong");
+    strong.textContent = (turn === 0 ? "Opening reply failed" : "Reply " + turn + " failed") + ": ";
+    var code = document.createElement("code");
+    code.textContent = message;
+    box.appendChild(strong);
+    box.appendChild(code);
+    var hint = explainError(message);
+    if (hint) {
+      var p = document.createElement("div");
+      p.textContent = hint;
+      box.appendChild(p);
+    }
+    box.hidden = false;
+  }
+
   function startConversation(vars) {
     if (session && session.chat) session.chat.stop();
     resetChatDom();
@@ -143,6 +176,7 @@
     };
     unsent = false;
 
+    $("chat-error").hidden = true;
     $("setup-form").hidden = true;
     $("chat-area").hidden = false;
     $("topic-shown").textContent = vars.topic;
@@ -154,7 +188,8 @@
       dom: { history: $("chat-history-1"), input: $("message-input-1"), button: $("send-button-1") },
       fetch: MOCK ? mockFetch : undefined,
       onBotReply: function (record) { addTurnCard(record); },
-      onDone: function () { flash($("email-status"), "Conversation finished. Add any notes, then click Email feedback.", ""); }
+      onDone: function () { flash($("email-status"), "Conversation finished. Add any notes, then click Email feedback.", ""); },
+      onRequestError: showRequestError
     });
     session.chat = chat;
     session.system = chat.system;

@@ -259,3 +259,21 @@ test("enforce_word_limit off: long replies pass through with no extra call", asy
   assert.equal(t.calls.length, 1);
   assert.equal(t.chat.state.records[0].over_limit, 1);
 });
+
+test("proxy { error } message is kept and reported via onRequestError", async () => {
+  const log = {};
+  const reported = [];
+  const dom = { history: makeEl(), input: makeEl(), button: makeEl() };
+  const chat = BC.createChat({
+    cfg: { delay_ms_per_word: 0 },
+    vars: { topic: "T", p_response: "R" },
+    store: { set: (k, v) => { log[k] = v; } },
+    dom,
+    fetch: () => Promise.resolve({ ok: false, status: 502, json: () => Promise.resolve({ error: "The model `x` does not exist" }) }),
+    onRequestError: (turn, msg) => reported.push([turn, msg])
+  });
+  await chat.start();
+  assert.equal(log.error_0, "HTTP 502: The model `x` does not exist");
+  assert.deepEqual(reported, [[0, "HTTP 502: The model `x` does not exist"]]);
+  assert.equal(log.response_0, BC.DEFAULTS.opening_fallback);
+});

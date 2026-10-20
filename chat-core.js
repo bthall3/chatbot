@@ -235,6 +235,7 @@ var BalancedChat = (function () {
     var timer = opts.setTimeout || setTimeout;
     var onBotReply = opts.onBotReply || function () {};
     var onDone = opts.onDone || function () {};
+    var onRequestError = opts.onRequestError || function () {};
     var maxMessages = parseInt(cfg.max_messages, 10);
 
     var system = buildSystemPrompt(cfg, vars);
@@ -281,7 +282,12 @@ var BalancedChat = (function () {
         signal: controller ? controller.signal : undefined
       })
         .then(function (res) {
-          if (!res.ok) throw new Error("HTTP " + res.status);
+          if (!res.ok) {
+            // Surface the proxy's { error } message, e.g. a bad model name or missing key.
+            return res.json().catch(function () { return {}; }).then(function (d) {
+              throw new Error("HTTP " + res.status + (d && d.error ? ": " + d.error : ""));
+            });
+          }
           return res.json();
         })
         .then(function (data) {
@@ -403,6 +409,7 @@ var BalancedChat = (function () {
         .catch(function (err) {
           if (state.stopped) return null;
           logError(0, String(err && err.message ? err.message : err));
+          onRequestError(0, String(err && err.message ? err.message : err));
           var record = recordTurn(0, "", { ok: false, parts: null, raw: cfg.opening_fallback });
           setBusy(false);
           addBubble(record.shown, "bot");
@@ -453,6 +460,7 @@ var BalancedChat = (function () {
           if (state.stopped) return null;
           // Message doesn't count: put it back so the participant can resend.
           logError(turn, String(err && err.message ? err.message : err));
+          onRequestError(turn, String(err && err.message ? err.message : err));
           userEl.classList.add("failed");
           setBusy(false);
           addBubble(cfg.error_message, "bot", "error");
