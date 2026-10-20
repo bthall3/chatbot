@@ -22,7 +22,7 @@ var BalancedChat = (function () {
     "Write support and dissent as plain statements with no lead-in or transition word (no \"However\", \"On the other hand\", \"One point in your favor\"); a transition is added for you.",
     "Start support and dissent with a lowercase letter unless the first word is a proper noun or \"I\".",
     "Never reuse evidence from earlier turns. Vary your wording, and don't open every reply the same way. Stay neutral; never say which side is right.",
-    "Keep the whole reply under {word_limit} words.",
+    "STRICT word budget: acknowledge at most {ack_words} words, support at most {point_words}, dissent at most {point_words}, question at most {question_words}; the whole reply must stay under {word_limit} words. Count before answering; replies over the limit are rejected.",
     'Respond ONLY with JSON: {"acknowledge":"","support":"","dissent":"","question":""}',
     "",
     'Example (topic: Is Michael Jordan the GOAT? Participant: "Yes, he was the most dominant player ever."):',
@@ -47,6 +47,9 @@ var BalancedChat = (function () {
     request_timeout_ms: 20000,
     prompt_template: DEFAULT_PROMPT,
     opening_template: DEFAULT_OPENING_PROMPT,
+    // If a reply is over word_limit: ask for one shorter rewrite, then drop the
+    // question and then the acknowledgment if it is still too long.
+    enforce_word_limit: true,
     // Placed before the second point; one is picked at random each turn (never the
     // same one twice in a row). One per line.
     transitions: [
@@ -60,26 +63,40 @@ var BalancedChat = (function () {
 
   // Only known placeholders are filled, so JSON braces in the template are left alone.
   function fillTemplate(template, vars) {
-    return String(template).replace(/\{(topic|p_response|word_limit)\}/g, function (m, key) {
+    return String(template).replace(/\{(topic|p_response|word_limit|ack_words|point_words|question_words)\}/g, function (m, key) {
       var v = vars[key];
       return v === undefined || v === null ? "" : String(v).replace(/[\r\n]+/g, " ").trim();
     });
   }
 
+  // Per-part budgets that add up to the limit, leaving room for the transition
+  // phrase the page inserts. word_limit 50 -> ack 9, support 14, dissent 14, question 9.
+  function wordBudgets(cfg) {
+    var limit = parseInt(cfg.word_limit, 10) || 50;
+    var room = Math.max(limit - transitionAllowance(cfg), 8);
+    var ack = Math.floor(room * 0.2);
+    var question = Math.floor(room * 0.2);
+    return {
+      word_limit: limit,
+      ack_words: ack,
+      question_words: question,
+      point_words: Math.floor((room - ack - question) / 2)
+    };
+  }
+
+  function templateVars(cfg, vars) {
+    var b = wordBudgets(cfg);
+    b.topic = vars.topic;
+    b.p_response = vars.p_response;
+    return b;
+  }
+
   function buildSystemPrompt(cfg, vars) {
-    return fillTemplate(cfg.prompt_template, {
-      topic: vars.topic,
-      p_response: vars.p_response,
-      word_limit: cfg.word_limit
-    });
+    return fillTemplate(cfg.prompt_template, templateVars(cfg, vars));
   }
 
   function buildOpeningPrompt(cfg, vars) {
-    return fillTemplate(cfg.opening_template, {
-      topic: vars.topic,
-      p_response: vars.p_response,
-      word_limit: cfg.word_limit
-    });
+    return fillTemplate(cfg.opening_template, templateVars(cfg, vars));
   }
 
   // Same body shape the launched Qualtrics arms send to the proxy, plus reasoning_effort.
@@ -173,6 +190,27 @@ var BalancedChat = (function () {
     return String(text || "").split(/\s+/).filter(Boolean).length;
   }
 
+  // Words the longest transition phrase adds to a reply.
+  function transitionAllowance(cfg) {
+    return parseTransitions(cfg.transitions).reduce(function (max, t) {
+      return Math.max(max, countWords(t));
+    }, 0);
+  }
+
+  function partsWords(parts) {
+    return countWords(parts.acknowledge) + countWords(parts.support) +
+      countWords(parts.dissent) + countWords(parts.question);
+  }
+
+  // Last resort for a reply that is still too long: drop the question, then the
+  // acknowledgment. The supporting and dissenting points are never cut.
+  function trimToLimit(parts, limit, allowance) {
+    var out = { acknowledge: parts.acknowledge, support: parts.support, dissent: parts.dissent, question: parts.question };
+    if (partsWords(out) + allowance > limit) out.question = "";
+    if (partsWords(out) + allowance > limit) out.acknowledge = "";
+    return out;
+  }
+
   /*
    * opts:
    *   cfg      - settings (missing keys fall back to DEFAULTS)
@@ -262,12 +300,49 @@ var BalancedChat = (function () {
     function getBalancedReply(history, prompt, turn) {
       return callProxy(history, prompt).then(function (text) {
         var parsed = parseBalancedReply(text);
-        if (parsed.ok) return parsed;
+        if (parsed.ok) return enforceLimit(history, prompt, parsed, turn);
         logError(turn, "unparseable reply, retried");
         return callProxy(history, prompt).then(function (text2) {
           var parsed2 = parseBalancedReply(text2);
-          return parsed2.ok ? parsed2 : { ok: false, parts: null, raw: text2 };
+          return parsed2.ok ? enforceLimit(history, prompt, parsed2, turn) : { ok: false, parts: null, raw: text2 };
         });
+      });
+    }
+
+    // Over the limit: ask once for a shorter rewrite (keeping the same points),
+    // then trim if it is still too long.
+    function enforceLimit(history, prompt, parsed, turn) {
+      var limit = parseInt(cfg.word_limit, 10);
+      var allowance = transitionAllowance(cfg);
+      var words = partsWords(parsed.parts) + allowance;
+      if (!cfg.enforce_word_limit || !limit || words <= limit) return parsed;
+
+      var b = wordBudgets(cfg);
+      var rewriteHistory = history.concat(
+        [{ role: "user", content: prompt }, { role: "assistant", content: parsed.raw }]
+      );
+      var rewritePrompt =
+        "That reply was about " + words + " words; the limit is " + limit + ". Rewrite the SAME reply shorter: " +
+        "acknowledge at most " + b.ack_words + " words, support at most " + b.point_words +
+        ", dissent at most " + b.point_words + ", question at most " + b.question_words +
+        ". Keep one supporting and one dissenting point. Respond ONLY with the JSON.";
+      logError(turn, "over word limit (" + words + "), asked for rewrite");
+
+      function trimmed(p) {
+        var parts = trimToLimit(p.parts, limit, allowance);
+        if (partsWords(parts) + allowance > limit) logError(turn, "still over word limit after trimming");
+        else if (parts.question !== p.parts.question || parts.acknowledge !== p.parts.acknowledge) {
+          logError(turn, "trimmed to fit word limit");
+        }
+        return { ok: true, parts: parts, raw: p.raw };
+      }
+
+      return callProxy(rewriteHistory, rewritePrompt).then(function (text) {
+        var again = parseBalancedReply(text);
+        if (!again.ok) return trimmed(parsed);
+        return partsWords(again.parts) + allowance <= limit ? again : trimmed(again);
+      }, function () {
+        return trimmed(parsed);
       });
     }
 
@@ -285,7 +360,8 @@ var BalancedChat = (function () {
         order: parsed.ok ? order : "",
         transition: transition,
         parse_ok: parsed.ok ? 1 : 0,
-        words: countWords(shown)
+        words: countWords(shown),
+        over_limit: countWords(shown) > parseInt(cfg.word_limit, 10) ? 1 : 0
       };
       if (turn > 0) store.set("msg_" + turn, userMessage);
       store.set("response_" + turn, shown);
@@ -294,6 +370,7 @@ var BalancedChat = (function () {
       store.set("order_" + turn, record.order);
       store.set("transition_" + turn, transition);
       store.set("parse_ok_" + turn, String(record.parse_ok));
+      store.set("words_" + turn, String(record.words));
       state.records.push(record);
       // Keep the JSON in history so the model keeps answering in JSON.
       if (turn > 0) state.history.push({ role: "user", content: userMessage });
@@ -420,6 +497,8 @@ var BalancedChat = (function () {
     pickTransition: pickTransition,
     renderReply: renderReply,
     countWords: countWords,
+    wordBudgets: wordBudgets,
+    trimToLimit: trimToLimit,
     createChat: createChat
   };
 })();

@@ -212,3 +212,50 @@ test("stop() discards a reply that arrives afterwards", async () => {
   await p;
   assert.deepEqual(t.bubbles(), ["typing…"]);
 });
+
+// ---------- word limit ----------
+const words = (n, w = "word") => Array(n).fill(w).join(" ");
+const reply = (ack, sup, dis, q) => JSON.stringify({
+  acknowledge: words(ack, "ack"), support: words(sup, "sup"), dissent: words(dis, "dis"), question: words(q, "q")
+});
+
+test("wordBudgets split the limit across parts, leaving room for the transition", () => {
+  const b = BC.wordBudgets(BC.DEFAULTS);
+  assert.deepEqual(b, { word_limit: 50, ack_words: 9, question_words: 9, point_words: 14 });
+  assert.ok(b.ack_words + 2 * b.point_words + b.question_words + 3 <= 50);
+  const sys = BC.buildSystemPrompt(BC.DEFAULTS, { topic: "T", p_response: "R" });
+  assert.match(sys, /support at most 14/);
+  assert.doesNotMatch(sys, /\{(ack|point|question)_words\}/);
+});
+
+test("over-limit reply: asks once for a rewrite and uses the shorter one", async () => {
+  const t = setup([reply(10, 25, 25, 10), reply(5, 10, 10, 5)], { word_limit: 50 });
+  await t.chat.start();
+  assert.equal(t.calls.length, 2);
+  assert.match(t.calls[1].prompt, /limit is 50/);
+  assert.equal(t.calls[1].history.length, 2); // original prompt + too-long reply
+  assert.ok(Number(t.log.words_0) <= 50);
+  assert.match(t.log.error_0, /asked for rewrite/);
+});
+
+test("still over after rewrite: drops the question, then the acknowledgment, never the points", async () => {
+  const t = setup([reply(10, 20, 20, 10), reply(10, 20, 20, 10)], { word_limit: 50 });
+  await t.chat.start();
+  const r = t.chat.state.records[0];
+  assert.equal(r.parts.question, "");
+  assert.equal(r.parts.acknowledge, "");
+  assert.equal(r.parts.support, words(20, "sup"));
+  assert.equal(r.parts.dissent, words(20, "dis"));
+  assert.ok(r.words <= 50);
+  const t2 = setup([reply(5, 18, 18, 10), reply(5, 18, 18, 10)], { word_limit: 50 });
+  await t2.chat.start();
+  assert.equal(t2.chat.state.records[0].parts.question, "");
+  assert.equal(t2.chat.state.records[0].parts.acknowledge, words(5, "ack"));
+});
+
+test("enforce_word_limit off: long replies pass through with no extra call", async () => {
+  const t = setup([reply(10, 25, 25, 10)], { enforce_word_limit: false });
+  await t.chat.start();
+  assert.equal(t.calls.length, 1);
+  assert.equal(t.chat.state.records[0].over_limit, 1);
+});

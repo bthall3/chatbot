@@ -26,7 +26,7 @@ The existing custom CSS (`#chat-container`, `.bot-message`, …) already styles 
 - Declare these fields in an Embedded Data element **before** the randomizer, with no value, so `setEmbeddedData` saves them:
   - `msg_1` … `msg_5`, `response_0` … `response_4` (already declared for the other arms)
   - `support_0` … `support_4`, `dissent_0` … `dissent_4`
-  - `order_0` … `order_4`, `transition_0` … `transition_4`, `parse_ok_0` … `parse_ok_4`, `error_0` … `error_4`
+  - `order_0` … `order_4`, `transition_0` … `transition_4`, `parse_ok_0` … `parse_ok_4`, `words_0` … `words_4`, `error_0` … `error_4`
 
   With `max_messages = 5`, the 5th participant message gets no reply by design, so `response_5` stays empty.
 

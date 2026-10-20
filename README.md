@@ -49,6 +49,7 @@ Add `?mock=1` to the URL to test the page without calling the API:
 - `support_N`, `dissent_N`: the two points.
 - `order_N`: `support-first` or `dissent-first`.
 - `transition_N`: the transition phrase placed before the second point.
+- `words_N`: word count of the reply as shown.
 - `parse_ok_N`: `0` if the model ignored the format and the raw reply was shown.
 - `error_N`: network or format problems on that turn.
 

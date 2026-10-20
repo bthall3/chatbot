@@ -4,7 +4,7 @@
 
   var PAGE = window.PAGE_CONFIG || {};
   var MOCK = /[?&]mock=1\b/.test(location.search);
-  var SETTINGS_KEY = "balancedChat.settings.v2"; // v2: labels replaced by transitions
+  var SETTINGS_KEY = "balancedChat.settings.v3"; // v3: per-part word budgets in the prompt
 
   var TOPICS = [
     "People in romantic relationships should not have opposite-sex friendships.",
@@ -21,7 +21,7 @@
 
   var EDITABLE = [
     "prompt_template", "opening_template", "proxy_url", "model", "reasoning_effort", "temperature", "max_tokens", "word_limit",
-    "max_messages", "delay_ms_per_word", "order", "transitions"
+    "max_messages", "delay_ms_per_word", "order", "transitions", "enforce_word_limit"
   ];
   var NUMERIC = { temperature: 1, max_tokens: 1, word_limit: 1, max_messages: 1, delay_ms_per_word: 1 };
 
@@ -44,7 +44,7 @@
     var out = {};
     EDITABLE.forEach(function (key) {
       var el = settingsForm.elements[key];
-      out[key] = NUMERIC[key] ? Number(el.value) : el.value;
+      out[key] = el.type === "checkbox" ? el.checked : NUMERIC[key] ? Number(el.value) : el.value;
     });
     return out;
   }
@@ -52,7 +52,9 @@
   function fillSettings(values) {
     EDITABLE.forEach(function (key) {
       var v = values[key] !== undefined ? values[key] : BalancedChat.DEFAULTS[key];
-      settingsForm.elements[key].value = v;
+      var el = settingsForm.elements[key];
+      if (el.type === "checkbox") el.checked = !!v;
+      else el.value = v;
     });
   }
 
@@ -206,7 +208,8 @@
     var li = document.createElement("li");
     li.className = "turn-card";
     var h = document.createElement("h3");
-    h.textContent = (turn === 0 ? "Opening reply" : "Reply " + turn) + " · " + record.words + " words";
+    h.textContent = (turn === 0 ? "Opening reply" : "Reply " + turn) + " · " + record.words + " words" +
+      (record.over_limit ? " (over limit)" : "");
     li.appendChild(h);
 
     if (record.user) {
@@ -247,7 +250,9 @@
       unsent = true;
     });
     li.appendChild(note);
-    $("turn-feedback").appendChild(li);
+    var listEl = $("turn-feedback");
+    listEl.appendChild(li);
+    listEl.scrollTop = listEl.scrollHeight; // keep the newest reply in view
   }
 
   function buildReport() {
@@ -272,6 +277,7 @@
           transition: r.transition,
           parse_ok: r.parse_ok,
           words: r.words,
+          over_limit: r.over_limit,
           rating: session.ratings[t]
         };
       }),

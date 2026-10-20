@@ -5,13 +5,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Balanced Chatbot Lab</title>
-  <link rel="stylesheet" href="styles.css?v=2026-10-20.5">
+  <link rel="stylesheet" href="styles.css?v=2026-10-20.6">
 </head>
 <body>
   <header class="topbar">
     <h1>Balanced Chatbot Lab</h1>
     <p>Test the even-handed chatbot: each reply should give one point <em>for</em> your view and one point <em>against</em> it.</p>
-    <small class="muted" id="version">Version 2026-10-20.5 (growing text box)</small>
+    <small class="muted" id="version">Version 2026-10-20.6 (word limit + scrolling feedback)</small>
     <span id="mock-badge" class="badge" hidden>Mock mode: no real API calls</span>
   </header>
 
@@ -21,7 +21,7 @@
       <h2 id="settings-title">Prompt &amp; settings</h2>
       <form id="settings-form">
         <label for="s-prompt_template">System prompt
-          <small><code>{topic}</code>, <code>{p_response}</code>, <code>{word_limit}</code> are filled in automatically.</small>
+          <small><code>{topic}</code>, <code>{p_response}</code>, <code>{word_limit}</code> and the per-part budgets <code>{ack_words}</code>, <code>{point_words}</code>, <code>{question_words}</code> (worked out from the word limit) are filled in automatically.</small>
         </label>
         <textarea id="s-prompt_template" name="prompt_template" rows="16" spellcheck="false"></textarea>
 
@@ -40,6 +40,9 @@
           <label>Participant messages <input name="max_messages" type="number" min="2" max="20"></label>
           <label>Delay (ms/word) <input name="delay_ms_per_word" type="number" min="0" step="50"></label>
         </div>
+        <label class="check"><input type="checkbox" name="enforce_word_limit"> Enforce word limit
+          <small>If a reply runs long, ask the model once for a shorter rewrite; if it's still long, drop the question, then the opening acknowledgment.</small>
+        </label>
         <label>Order of points
           <select name="order">
             <option value="support-first">Support first</option>
@@ -107,7 +110,7 @@
       <p class="muted" id="feedback-empty">Rate each chatbot reply here once the conversation starts.</p>
       <ol id="turn-feedback"></ol>
       <label for="overall-notes">Overall notes</label>
-      <textarea id="overall-notes" rows="5" placeholder="Did the bot feel balanced? Was the evidence accurate? Anything off?"></textarea>
+      <textarea id="overall-notes" rows="3" placeholder="Did the bot feel balanced? Was the evidence accurate? Anything off?"></textarea>
       <div class="row">
         <button type="button" id="email-feedback" class="primary">Email feedback</button>
         <button type="button" id="download-json">Download JSON</button>
@@ -116,8 +119,8 @@
     </section>
   </main>
 
-  <script src="config.js?v=2026-10-20.5"></script>
-  <script src="chat-core.js?v=2026-10-20.5"></script>
-  <script src="app.js?v=2026-10-20.5"></script>
+  <script src="config.js?v=2026-10-20.6"></script>
+  <script src="chat-core.js?v=2026-10-20.6"></script>
+  <script src="app.js?v=2026-10-20.6"></script>
 </body>
 </html>
