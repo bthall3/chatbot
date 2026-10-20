@@ -112,6 +112,7 @@ test("opening turn is a balanced reply and is logged as response_0", async () =>
   assert.match(t.calls[0].prompt, /He was dominant\./);
   assert.equal(t.calls[0].model, "gpt-5.6-luna");
   assert.equal(t.calls[0].reasoning_effort, "none");
+  assert.equal(BC.DEFAULTS.proxy_url, "https://balanced-chat-proxy.bthall3.workers.dev/");
   assert.match(t.log.response_0, /One point in your favor: Support 0\./);
   assert.equal(t.log.support_0, "Support 0.");
   assert.equal(t.log.parse_ok_0, "1");

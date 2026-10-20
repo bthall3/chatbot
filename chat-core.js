@@ -32,7 +32,7 @@ var BalancedChat = (function () {
     "Start the conversation with your first reply in the required JSON format.";
 
   var DEFAULTS = {
-    proxy_url: "https://balanced-chat-proxy.hallbradent.workers.dev/",
+    proxy_url: "https://balanced-chat-proxy.bthall3.workers.dev/",
     model: "gpt-5.6-luna",
     reasoning_effort: "none", // reasoning models: "none" keeps replies fast and allows temperature
     temperature: 0.5,
