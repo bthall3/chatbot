@@ -4,7 +4,7 @@
 
   var PAGE = window.PAGE_CONFIG || {};
   var MOCK = /[?&]mock=1\b/.test(location.search);
-  var SETTINGS_KEY = "balancedChat.settings.v6"; // v6: direct "reply" sentence in the prompt
+  var SETTINGS_KEY = "balancedChat.settings.v7"; // v7: model writes the whole conversational message
 
   var TOPICS = [
     "People in romantic relationships should not have opposite-sex friendships.",
@@ -21,7 +21,7 @@
 
   var EDITABLE = [
     "prompt_template", "opening_template", "proxy_url", "model", "reasoning_effort", "temperature", "max_tokens", "word_limit",
-    "max_messages", "delay_ms_per_word", "order", "transitions", "enforce_word_limit"
+    "max_messages", "delay_ms_per_word", "enforce_word_limit"
   ];
   var NUMERIC = { temperature: 1, max_tokens: 1, word_limit: 1, max_messages: 1, delay_ms_per_word: 1 };
 
@@ -255,9 +255,6 @@
           bot_shown: r.shown,
           support: r.parts ? r.parts.support : "",
           dissent: r.parts ? r.parts.dissent : "",
-          order: r.order,
-          transition: r.transition,
-          reply: r.parts ? r.parts.reply : "",
           stance: r.stance,
           parse_ok: r.parse_ok,
           words: r.words,
@@ -288,7 +285,8 @@
     rep.turns.forEach(function (t) {
       lines.push("", "--- " + (t.turn === 0 ? "Opening reply" : "Turn " + t.turn) + " ---");
       if (t.participant) lines.push("Participant: " + t.participant);
-      lines.push("Bot (" + t.words + " words, " + (t.parse_ok ? (t.stance || "?") + ", " + t.order + ', "' + t.transition + '"' : "NOT balanced format") + "): " + t.bot_shown);
+      lines.push("Bot (" + t.words + " words, " + (t.parse_ok ? "stance: " + (t.stance || "?") : "NOT balanced format") + "): " + t.bot_shown);
+      if (t.parse_ok) lines.push("  woven in -> for: " + t.support + " | against: " + t.dissent);
     });
     if (rep.final_message) lines.push("", "Participant (final, no reply by design): " + rep.final_message);
     if (rep.errors.length) lines.push("", "ERRORS:", rep.errors.join("\n"));
@@ -382,12 +380,13 @@
           ? "Sorry, here is plain text instead of JSON."
           : JSON.stringify({
               stance: /you'?re right/i.test(body.prompt) ? "shifted" : "original",
-              reply: /\?\s*$/.test(body.prompt)
-                ? "Good question, here's a mock answer to it."
-                : "A mock reply to what you just said.",
-              support: "a mock supporting point (#" + mockCount + ") you didn't mention.",
-              dissent: "a mock dissenting point (#" + mockCount + ") to consider.",
-              question: "What do you think?"
+              message: (/\?\s*$/.test(body.prompt)
+                ? "Good question, here's a mock answer to it. "
+                : "That's a mock reaction to what you just said. ") +
+                "Mock supporting point #" + mockCount + " fits your view, though mock challenging point #" +
+                mockCount + " pulls the other way. Where does that leave you?",
+              support: "mock supporting point #" + mockCount,
+              dissent: "mock challenging point #" + mockCount
             });
         resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ text: text }); } });
       }, 250);

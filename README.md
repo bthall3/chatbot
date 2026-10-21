@@ -1,15 +1,15 @@
 # Balanced Chatbot Lab
 
-This is a test page for a **balanced ("even-handed") chatbot arm** for the AI Interaction study (validating / critical / control). The idea comes from the selective exposure literature on even-handed information search. In every turn, the bot:
+This is a test page for a **balanced ("even-handed") chatbot arm** for the AI Interaction study (validating / critical / control). The idea comes from the selective exposure literature on even-handed information search.
 
-1. **replies directly** to what the participant just said, in one short sentence. It answers their question if they asked one, or engages with something specific they said, without taking sides;
-2. gives **one supporting point** the participant didn't mention;
-3. gives **one dissenting point** of about equal strength;
-4. optionally asks a follow-up question that builds on their message.
+The bot is a **conversation partner first**. It replies to what the participant actually said, answers their questions and picks up their examples. **Every message** also weaves in, naturally and without lists or labels:
+
+- **one consideration that supports** the participant's view, which they didn't mention;
+- **one consideration that challenges** it, of about equal strength.
 
 **Following the participant:** "support" and "dissent" are relative to where the participant stands *now*, not just their opening view. If they start agreeing with the other side, the bot follows. Its main point builds on their new leaning, and the counterpoint becomes a brief, gentle "worth keeping in mind" from the side they moved away from (about half as long), never a rebuttal. While they hold their original view, both points are equally strong.
 
-The model answers in JSON (`stance`, `reply`, `support`, `dissent`, `question`). That way the 1:1 balance can be checked on every turn, the parts can be shown in a fixed order, and each part is logged separately for analysis.
+The model writes the whole message itself, and the page shows it as-is. It answers in JSON (`stance`, `message`, `support`, `dissent`). `message` is what the participant reads. `support` and `dissent` are the model's short summaries of the two considerations it wove in; they're logged, never shown. A turn only counts as balanced if both are present; otherwise the page retries once.
 
 ## Using the page
 Open the GitHub Pages URL; mock mode is described further down.
@@ -48,12 +48,9 @@ Add `?mock=1` to the URL to test the page without calling the API:
 
 ## Logged fields (same names in Qualtrics)
 - `msg_N`: participant message.
-- `response_N`: the reply as shown; `response_0` is the opening reply.
-- `support_N`, `dissent_N`: the point for the participant's current leaning, and the point from the other side. After a shift, the dissent is the soft counterpoint.
+- `response_N`: the bot's message as shown; `response_0` is the opening message.
+- `support_N`, `dissent_N`: the model's summary of the consideration it wove in for the participant's current leaning, and the one from the other side. After a shift, the dissent is the gentle counterpoint.
 - `stance_N`: the model's read of the participant: `original`, `shifted` or `mixed`.
-- `reply_N`: the direct reply sentence that opens the bot's message.
-- `order_N`: `support-first` or `dissent-first`.
-- `transition_N`: the transition phrase placed before the second point.
 - `words_N`: word count of the reply as shown.
 - `parse_ok_N`: `0` if the model ignored the format and the raw reply was shown.
 - `error_N`: network or format problems on that turn.
@@ -64,4 +61,6 @@ Add `?mock=1` to the URL to test the page without calling the API:
 - **Length confound:** about 50 words per reply here versus 30 in the launched arms.
 - **Model shutdown:** `gpt-4.1-nano`, the model used by the launched arms, is scheduled to shut down on Oct 23, 2026, per OpenAI's deprecations page.
 - **Shift detection:** the model judges `stance` itself. Check `stance_N` against the transcripts during piloting. After a shift, the two sides are no longer equally weighted, so balance varies by participant; account for this in analysis.
+- **Self-reported balance:** the page can't see inside free prose, so `support_N` and `dissent_N` are the model's own account of what it wove in. Spot-check them against `response_N` during piloting.
+- **Word limit:** a long message gets one rewrite request. If it's still over, it's shown and flagged, because free prose can't be cut safely.
 - **Accuracy:** the "evidence" comes from a small model and can be wrong or made up. Use the overall notes to flag weak or inaccurate points during piloting.
