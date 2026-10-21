@@ -2,13 +2,14 @@
 
 This is a test page for a **balanced ("even-handed") chatbot arm** for the AI Interaction study (validating / critical / control). The idea comes from the selective exposure literature on even-handed information search. In every turn, the bot:
 
-1. gives **one supporting point** the participant didn't mention;
-2. gives **one dissenting point** of about equal strength;
-3. optionally asks a follow-up question.
+1. **replies directly** to what the participant just said, in one short sentence. It answers their question if they asked one, or engages with something specific they said, without taking sides;
+2. gives **one supporting point** the participant didn't mention;
+3. gives **one dissenting point** of about equal strength;
+4. optionally asks a follow-up question that builds on their message.
 
 **Following the participant:** "support" and "dissent" are relative to where the participant stands *now*, not just their opening view. If they start agreeing with the other side, the bot follows. Its main point builds on their new leaning, and the counterpoint becomes a brief, gentle "worth keeping in mind" from the side they moved away from (about half as long), never a rebuttal. While they hold their original view, both points are equally strong.
 
-The model answers in JSON (`stance`, `support`, `dissent`, `question`). That way the 1:1 balance can be checked on every turn, the parts can be shown in a fixed order, and each part is logged separately for analysis.
+The model answers in JSON (`stance`, `reply`, `support`, `dissent`, `question`). That way the 1:1 balance can be checked on every turn, the parts can be shown in a fixed order, and each part is logged separately for analysis.
 
 ## Using the page
 Open the GitHub Pages URL; mock mode is described further down.
@@ -50,6 +51,7 @@ Add `?mock=1` to the URL to test the page without calling the API:
 - `response_N`: the reply as shown; `response_0` is the opening reply.
 - `support_N`, `dissent_N`: the point for the participant's current leaning, and the point from the other side. After a shift, the dissent is the soft counterpoint.
 - `stance_N`: the model's read of the participant: `original`, `shifted` or `mixed`.
+- `reply_N`: the direct reply sentence that opens the bot's message.
 - `order_N`: `support-first` or `dissent-first`.
 - `transition_N`: the transition phrase placed before the second point.
 - `words_N`: word count of the reply as shown.

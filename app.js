@@ -4,7 +4,7 @@
 
   var PAGE = window.PAGE_CONFIG || {};
   var MOCK = /[?&]mock=1\b/.test(location.search);
-  var SETTINGS_KEY = "balancedChat.settings.v5"; // v5: stance / follow-the-participant prompt
+  var SETTINGS_KEY = "balancedChat.settings.v6"; // v6: direct "reply" sentence in the prompt
 
   var TOPICS = [
     "People in romantic relationships should not have opposite-sex friendships.",
@@ -257,6 +257,7 @@
           dissent: r.parts ? r.parts.dissent : "",
           order: r.order,
           transition: r.transition,
+          reply: r.parts ? r.parts.reply : "",
           stance: r.stance,
           parse_ok: r.parse_ok,
           words: r.words,
@@ -381,6 +382,9 @@
           ? "Sorry, here is plain text instead of JSON."
           : JSON.stringify({
               stance: /you'?re right/i.test(body.prompt) ? "shifted" : "original",
+              reply: /\?\s*$/.test(body.prompt)
+                ? "Good question, here's a mock answer to it."
+                : "A mock reply to what you just said.",
               support: "a mock supporting point (#" + mockCount + ") you didn't mention.",
               dissent: "a mock dissenting point (#" + mockCount + ") to consider.",
               question: "What do you think?"

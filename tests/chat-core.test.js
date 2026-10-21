@@ -86,6 +86,28 @@ test("renderReply: no labels, transition before the second point", () => {
     "He won 6 titles. Still, LeBron lasted longer.");
 });
 
+test("renderReply puts the direct reply first, before either point", () => {
+  const parts = { reply: "he did, he went 4-6.", support: "s.", dissent: "d.", question: "Q?" };
+  assert.equal(BC.renderReply(parts, "support-first", "But"), "He did, he went 4-6. S. But d. Q?");
+  assert.equal(BC.renderReply(parts, "dissent-first", "But"), "He did, he went 4-6. D. But s. Q?");
+});
+
+test("reply is parsed but optional, and logged as reply_N", async () => {
+  assert.equal(BC.parseBalancedReply('{"reply":" Yes. ","support":"a","dissent":"b"}').parts.reply, "Yes.");
+  assert.equal(BC.parseBalancedReply('{"support":"a","dissent":"b"}').ok, true);
+  const t = setup([JSON.stringify({ reply: "Fair question.", support: "s.", dissent: "d.", question: "" })]);
+  await t.chat.start();
+  assert.equal(t.log.reply_0, "Fair question.");
+  assert.match(t.log.response_0, /^Fair question\. S\./);
+});
+
+test("prompt asks for a direct, specific reply and bans stock openers", () => {
+  const sys = BC.buildSystemPrompt(BC.DEFAULTS, { topic: "T", p_response: "R" });
+  assert.match(sys, /If they asked a question, answer it/);
+  assert.match(sys, /Never start with "I see"/);
+  assert.match(sys, /builds on what they just said/);
+});
+
 test("renderReply lowercases common words after a transition but keeps proper nouns and acronyms", () => {
   const mk = (dissent) => BC.renderReply({ support: "x.", dissent, question: "" }, "support-first", "Yet");
   assert.equal(mk("Many couples disagree."), "X. Yet many couples disagree.");
@@ -115,7 +137,7 @@ test("buildSystemPrompt fills placeholders but leaves JSON braces alone", () => 
   assert.match(sys, /topic "T"/);
   assert.match(sys, /"line1 line2"/);
   assert.match(sys, /under 50 words/);
-  assert.match(sys, /\{"stance":"","support":"","dissent":"","question":""\}/);
+  assert.match(sys, /\{"stance":"","reply":"","support":"","dissent":"","question":""\}/);
   assert.doesNotMatch(sys, /acknowledge:/);
   assert.doesNotMatch(sys, /\{topic\}|\{p_response\}|\{word_limit\}/);
 });
@@ -222,11 +244,13 @@ const reply = (ack, sup, dis, q) => JSON.stringify({
 test("wordBudgets split the limit across parts, leaving room for the transition", () => {
   const b = BC.wordBudgets(BC.DEFAULTS);
   // longest default transition ("On the other hand,") is 4 words
-  assert.deepEqual(b, { word_limit: 50, ack_words: 0, question_words: 9, point_words: 18, soft_words: 9 });
-  assert.ok(2 * b.point_words + b.question_words + 4 <= 50);
+  assert.deepEqual(b, {
+    word_limit: 50, ack_words: 0, reply_words: 9, question_words: 9, point_words: 14, soft_words: 7
+  });
+  assert.ok(b.reply_words + 2 * b.point_words + b.question_words + 4 <= 50);
   const sys = BC.buildSystemPrompt(BC.DEFAULTS, { topic: "T", p_response: "R" });
-  assert.doesNotMatch(sys, /\{(ack|point|question)_words\}/);
-  assert.match(sys, /support at most 18/);
+  assert.doesNotMatch(sys, /\{(ack|reply|point|soft|question)_words\}/);
+  assert.match(sys, /reply at most 9, support at most 14/);
 });
 
 test("over-limit reply: asks once for a rewrite and uses the shorter one", async () => {
@@ -248,6 +272,28 @@ test("still over after rewrite: drops the question, never the points", async () 
   assert.equal(r.parts.dissent, words(20, "dis"));
   assert.ok(r.words <= 50);
   assert.match(t.log.error_0, /trimmed/);
+});
+
+test("still over after dropping the question: drops the direct reply too, never the points", async () => {
+  const long = JSON.stringify({
+    reply: words(8, "rep"), support: words(20, "sup"), dissent: words(20, "dis"), question: words(10, "q")
+  });
+  const t = setup([long, long], { word_limit: 50 });
+  await t.chat.start();
+  const r = t.chat.state.records[0];
+  assert.equal(r.parts.question, "");
+  assert.equal(r.parts.reply, "");
+  assert.equal(r.parts.support, words(20, "sup"));
+  assert.equal(r.parts.dissent, words(20, "dis"));
+  assert.ok(r.words <= 50);
+  // a reply that fits once the question is gone is kept
+  const fits = JSON.stringify({
+    reply: words(4, "rep"), support: words(20, "sup"), dissent: words(20, "dis"), question: words(10, "q")
+  });
+  const t2 = setup([fits, fits], { word_limit: 50 });
+  await t2.chat.start();
+  assert.equal(t2.chat.state.records[0].parts.question, "");
+  assert.equal(t2.chat.state.records[0].parts.reply, words(4, "rep"));
 });
 
 test("an acknowledgment the model adds anyway is not shown or counted", async () => {
@@ -296,10 +342,9 @@ test("stance is parsed and normalized; it is optional", () => {
 test("prompt tells the bot to follow a shift and fills the soft counterpoint budget", () => {
   const sys = BC.buildSystemPrompt(BC.DEFAULTS, { topic: "T", p_response: "R" });
   assert.match(sys, /Follow the participant/);
-  assert.match(sys, /at most 9 words\)/);
-  assert.match(sys, /\{"stance":"","support":"","dissent":"","question":""\}/);
+  assert.match(sys, /at most 7 words\)/);
   assert.doesNotMatch(sys, /\{soft_words\}/);
-  assert.equal(BC.wordBudgets(BC.DEFAULTS).soft_words, 9);
+  assert.equal(BC.wordBudgets(BC.DEFAULTS).soft_words, 7);
 });
 
 test("after a shift, the new-leaning point comes first even when order is dissent-first; stance is logged", async () => {
