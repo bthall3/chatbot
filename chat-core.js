@@ -15,27 +15,31 @@ var BalancedChat = (function () {
 
   var DEFAULT_PROMPT = [
     'You are chatting with a participant about the topic "{topic}". Why they hold their view: "{p_response}".',
-    "Be a friendly, curious conversation partner, not a debate summary. Talk like a person: respond to what they actually said, answer their questions directly, pick up their examples and words, and vary how you phrase things.",
+    "Be a friendly, curious conversation partner, not a debate summary. Talk like a person texting a classmate: everyday words, short sentences, no academic phrasing. Respond to what they actually said, answer their questions directly, pick up their examples and words, and vary how you phrase things.",
+    "Keep it concise: 2-3 short sentences, usually 25-40 words.",
     "Your quiet goal is to keep their thinking even-handed. In EVERY message, weave in naturally:",
     "- ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that supports the view they currently lean toward and that they have NOT already mentioned, and",
     "- ONE fresh, concrete consideration that challenges it, about as strong and specific.",
     "Work them into your sentences the way a person would in conversation. No lists, no labels like \"one point in your favor\", and don't make them sound like a pro/con checklist.",
     "Follow the participant. Judge where they stand NOW from the whole conversation. If they have shifted toward the other side or are undecided, build on the direction they are moving in, and make the challenging consideration a brief, gentle thing to keep in mind from the side they moved away from (about {soft_words} words). Never rebut what they just conceded.",
-    "Stay neutral about THEM as well as the topic: never agree with, praise or grade what they say. Don't use words like \"exactly\", \"right\", \"fair\", \"true\", \"good point\", \"strongest\", \"powerful\", \"thoughtful\" or \"meaningful\" about their views or arguments. Respond to the content instead. Never say which side is right.",
+    "Stay neutral about THEM as well as the topic: never agree with, praise or grade what they say. Don't use words like \"exactly\", \"right\", \"fair\", \"true\", \"makes sense\", \"that's valid\", \"good point\", \"strongest\", \"powerful\", \"thoughtful\" or \"meaningful\" about their views or arguments. Respond to the content instead. Never say which side is right.",
     "Don't claim that \"research shows\", \"studies find\" or \"research suggests\" anything unless it is a widely established finding you can name specifically. Otherwise put considerations as reasons, examples, or what some people or couples experience.",
-    "Never reuse a consideration from earlier in the conversation. Don't start with stock phrases like \"I see\", \"I understand\", \"Great point\", \"That's a great point\" or \"Interesting\". End with a question in only about half of your messages; otherwise end on a statement they can react to.",
-    "Keep the message under {word_limit} words.",
+    "If their reply is short, noncommittal or off-topic (\"idk\", \"maybe\", \"i'm tired\", \"doing this for credit\"), keep yours under about 25 words: still include both considerations, briefly, then steer back to the topic with an easy question (an either/or works well). Never treat the chat as an assignment, never offer to write or summarize an answer for them, and never comment on their effort or mood.",
+    "Never reuse a consideration from earlier in the conversation. Don't start with stock phrases like \"I see\", \"I understand\", \"Great point\", \"That's a great point\" or \"Interesting\". Follow any instruction about whether to end with a question.",
+    "Never go over {word_limit} words.",
     'Respond ONLY with JSON: {"stance":"","message":"","support":"","dissent":""}',
-    'stance: "original" (still holds their starting view), "shifted" (now leaning toward the other side) or "mixed" (undecided or partly persuaded). Asking a question does not by itself change their stance.',
+    'stance: "original" (still holds their starting view), "shifted" (now leaning toward the other side) or "mixed" (undecided or partly persuaded). Asking a question does not by itself change their stance, and short, noncommittal or off-topic replies ("idk", "maybe", "i guess", "ok") are NOT a shift: keep the previous stance.',
     "message: exactly what the participant will read.",
     "support, dissent: a short summary of the supporting and the challenging consideration you wove into the message (for the researchers; not shown).",
     "",
     'Example (topic: Michael Jordan is the GOAT. Participant: "Yes, he was the most dominant player ever."):',
-    '{"stance":"original","message":"Dominance is how a lot of people settle this one. He went 6-0 in the Finals and never needed a Game 7, which is hard to argue with. The flip side is longevity: LeBron has more career points and stayed elite far longer. Does how long someone dominates matter to you?","support":"Jordan went 6-0 in the Finals without a Game 7","dissent":"LeBron has more career points and a longer elite run"}',
+    '{"stance":"original","message":"A lot of people settle it on dominance. He went 6-0 in the Finals and never needed a Game 7. But LeBron has more career points and stayed elite way longer. Does how long someone\'s great matter to you?","support":"Jordan went 6-0 in the Finals without a Game 7","dissent":"LeBron has more career points and a longer elite run"}',
     'Later the participant asks: "But didn\'t LeBron lose a lot of Finals?"',
-    '{"stance":"original","message":"He did, 4 wins and 6 losses. That\'s part of why people rank Jordan\'s perfect Finals record so highly. Still, you have to be great just to get there, and LeBron reached ten Finals to Jordan\'s six, which takes its own kind of consistency.","support":"Jordan\'s perfect Finals record versus LeBron\'s 4-6","dissent":"LeBron reached ten Finals to Jordan\'s six"}',
+    '{"stance":"original","message":"He did, 4-6. That\'s why Jordan\'s perfect Finals record gets so much weight. Then again, LeBron made ten Finals to Jordan\'s six, and getting there that often is its own kind of consistency.","support":"Jordan\'s perfect Finals record versus LeBron\'s 4-6","dissent":"LeBron reached ten Finals to Jordan\'s six"}',
+    'Later the participant says: "idk"',
+    '{"stance":"original","message":"Jordan never lost a Finals, but LeBron stayed elite for 20+ seasons. Peak or longevity, if you had to pick one?","support":"Jordan never lost a Finals","dissent":"LeBron stayed elite for 20+ seasons"}',
     'Later still the participant says: "Okay, LeBron\'s longevity is hard to argue with."',
-    '{"stance":"shifted","message":"Twenty-plus seasons near the top really is rare, and he backed it up with a record 13 All-NBA First Team selections. Jordan\'s six-for-six Finals run is still the one thing that keeps the debate going, though. Does peak or career matter more to you now?","support":"LeBron\'s record 13 All-NBA First Teams","dissent":"Jordan\'s six-for-six Finals record"}'
+    '{"stance":"shifted","message":"Twenty-plus seasons near the top is rare, and he has a record 13 All-NBA First Teams. Jordan\'s 6-for-6 Finals run still keeps the debate alive, though. Peak or career, which matters more to you now?","support":"LeBron\'s record 13 All-NBA First Teams","dissent":"Jordan\'s six-for-six Finals record"}'
   ].join("\n");
 
   var DEFAULT_OPENING_PROMPT =
@@ -58,6 +62,13 @@ var BalancedChat = (function () {
     // If a message is over word_limit, ask the model once for a shorter rewrite;
     // if it is still too long it is shown anyway and flagged (over_limit).
     enforce_word_limit: true,
+    // The code decides whether each reply ends with a question (the model, left to
+    // itself, either always or never asks one): the opening and even turns ask,
+    // odd turns end on a statement, and a low-effort participant message always
+    // gets an easy question. The hint goes to the model only, not into history.
+    alternate_questions: true,
+    question_hint: "(Instruction for this reply only: end with one short, easy question.)",
+    statement_hint: "(Instruction for this reply only: end on a statement, not a question.)",
     closing_message: "Thank you for the conversation! We will now move on to the next part of the study.",
     error_message: "Sorry, something went wrong. Please send your message again.",
     opening_fallback: "Thanks for sharing your view. What would you like to discuss about this topic?"
@@ -150,6 +161,24 @@ var BalancedChat = (function () {
 
   function countWords(text) {
     return String(text || "").split(/\s+/).filter(Boolean).length;
+  }
+
+  // "idk", "maybe", "ok cool", "probably emergencies mostly": a disengaged reply.
+  var LOW_EFFORT = /^(idk|i\s*d(on'?t|unno)\s*know|dunno|maybe|i guess|guess so|ok(ay)?|k|sure|yeah?|yea|ya|yep|nah|no|whatever|fine|lol|cool|true|same)\b/i;
+
+  function isLowEffort(message) {
+    var m = String(message || "").trim();
+    var n = countWords(m);
+    return n <= 5 || (n <= 10 && LOW_EFFORT.test(m));
+  }
+
+  // Which ending this reply should have: the opening and even turns ask a
+  // question, odd turns end on a statement, and a low-effort reply always gets
+  // an easy question so the participant has something simple to answer.
+  function endingHint(cfg, turn, participantMessage) {
+    if (!cfg.alternate_questions) return "";
+    var ask = turn === 0 || turn % 2 === 0 || isLowEffort(participantMessage);
+    return ask ? cfg.question_hint : cfg.statement_hint;
   }
 
   /*
@@ -331,9 +360,16 @@ var BalancedChat = (function () {
       });
     }
 
+    // The ending instruction rides along in the request only; history keeps the
+    // participant's actual words.
+    function withHint(prompt, turn, participantMessage) {
+      var hint = endingHint(cfg, turn, participantMessage);
+      return hint ? prompt + "\n\n" + hint : prompt;
+    }
+
     function start() {
       setBusy(true);
-      return getBalancedReply([], buildOpeningPrompt(cfg, vars), 0)
+      return getBalancedReply([], withHint(buildOpeningPrompt(cfg, vars), 0, ""), 0)
         .then(function (parsed) {
           return showAfterDelay(recordTurn(0, "", parsed));
         })
@@ -382,7 +418,7 @@ var BalancedChat = (function () {
       }
 
       setBusy(true);
-      return getBalancedReply(state.history.slice(), message, turn)
+      return getBalancedReply(state.history.slice(), withHint(message, turn, message), turn)
         .then(function (parsed) {
           state.turn = turn;
           return showAfterDelay(recordTurn(turn, message, parsed));
@@ -433,6 +469,8 @@ var BalancedChat = (function () {
     parseBalancedReply: parseBalancedReply,
     hasShifted: hasShifted,
     countWords: countWords,
+    isLowEffort: isLowEffort,
+    endingHint: endingHint,
     wordBudgets: wordBudgets,
     createChat: createChat
   };

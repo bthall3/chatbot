@@ -7,6 +7,12 @@ The bot is a **conversation partner first**. It replies to what the participant 
 - **one consideration that supports** the participant's view, which they didn't mention;
 - **one consideration that challenges** it, of about equal strength.
 
+**Style:** casual and concise, usually 25–40 words in 2–3 short sentences (60 at most). It doesn't agree with, praise or grade the participant, and it avoids vague "research shows" claims.
+
+**Questions:** the code, not the model, decides how each reply ends. The opening and every other reply end with a short question; the rest end on a statement. A very short or noncommittal message ("idk", "maybe") always gets an easy question. This is the **Alternate questions** setting.
+
+**Bored or distracted participants:** for short, noncommittal or off-topic replies, the bot stays brief (under about 25 words), still includes both considerations, and steers back with an easy question. It never treats the chat as an assignment or comments on their effort, and "idk"-type replies don't count as a change of view.
+
 **Following the participant:** "support" and "dissent" are relative to where the participant stands *now*, not just their opening view. If they start agreeing with the other side, the bot follows. Its main point builds on their new leaning, and the counterpoint becomes a brief, gentle "worth keeping in mind" from the side they moved away from (about half as long), never a rebuttal. While they hold their original view, both points are equally strong.
 
 The model writes the whole message itself, and the page shows it as-is. It answers in JSON (`stance`, `message`, `support`, `dissent`). `message` is what the participant reads. `support` and `dissent` are the model's short summaries of the two considerations it wove in; they're logged, never shown. A turn only counts as balanced if both are present; otherwise the page retries once.

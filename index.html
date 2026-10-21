@@ -5,13 +5,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Balanced Chatbot Lab</title>
-  <link rel="stylesheet" href="styles.css?v=2026-10-21.3">
+  <link rel="stylesheet" href="styles.css?v=2026-10-21.4">
 </head>
 <body>
   <header class="topbar">
     <h1>Balanced Chatbot Lab</h1>
     <p>Test the even-handed chatbot: each reply should give one point <em>for</em> your view and one point <em>against</em> it.</p>
-    <small class="muted" id="version">Version 2026-10-21.3 (neutral wording, 60 words)</small>
+    <small class="muted" id="version">Version 2026-10-21.4 (concise, alternating questions)</small>
     <span id="mock-badge" class="badge" hidden>Mock mode: no real API calls</span>
   </header>
 
@@ -42,6 +42,9 @@
         </div>
         <label class="check"><input type="checkbox" name="enforce_word_limit"> Enforce word limit
           <small>If a reply runs long, ask the model once for a shorter rewrite; if it's still long, show it and flag it in the transcript.</small>
+        </label>
+        <label class="check"><input type="checkbox" name="alternate_questions"> Alternate questions
+          <small>The opening and every other reply end with a short question; the rest end on a statement. A very short or "idk"-type message always gets an easy question.</small>
         </label>
 
         <details>
@@ -109,8 +112,8 @@
     </section>
   </main>
 
-  <script src="config.js?v=2026-10-21.3"></script>
-  <script src="chat-core.js?v=2026-10-21.3"></script>
-  <script src="app.js?v=2026-10-21.3"></script>
+  <script src="config.js?v=2026-10-21.4"></script>
+  <script src="chat-core.js?v=2026-10-21.4"></script>
+  <script src="app.js?v=2026-10-21.4"></script>
 </body>
 </html>

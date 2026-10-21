@@ -101,10 +101,14 @@ test("prompt: conversational, balance woven into every message, follows shifts",
   assert.match(sys, /No lists, no labels/);
   assert.match(sys, /Follow the participant/);
   assert.match(sys, /about 12 words/); // {soft_words} at the 60-word limit
-  assert.match(sys, /under 60 words/);
+  assert.match(sys, /Never go over 60 words/);
   assert.match(sys, /never agree with, praise or grade/);
   assert.match(sys, /Don.t claim that "research shows"/);
-  assert.match(sys, /only about half of your messages/);
+  assert.match(sys, /usually 25-40 words/);
+  assert.match(sys, /texting a classmate/);
+  assert.match(sys, /Never treat the chat as an assignment/);
+  assert.match(sys, /are NOT a shift/);
+  assert.match(sys, /"makes sense"/);
   assert.match(sys, /\{"stance":"","message":"","support":"","dissent":""\}/);
   assert.doesNotMatch(sys, /\{(topic|p_response|word_limit|soft_words)\}/);
 });
@@ -116,7 +120,7 @@ test("older saved prompts with removed placeholders still fill in", () => {
 
 test("the example messages in the prompt respect the default word limit", () => {
   const examples = BC.DEFAULT_PROMPT.split("\n").filter((l) => l.startsWith('{"stance"'));
-  assert.equal(examples.length, 3);
+  assert.equal(examples.length, 4);
   for (const ex of examples) {
     const p = BC.parseBalancedReply(ex);
     assert.equal(p.ok, true);
@@ -153,7 +157,8 @@ test("full conversation: keys match the launched arms, history isn't duplicated,
   await t.say("third"); // max_messages = 3 -> closing, no call
   assert.equal(t.calls.length, 3);
   // Current message is sent only as `prompt`, not also at the end of `history`.
-  assert.equal(t.calls[1].prompt, "first");
+  assert.equal(t.calls[1].prompt, "first\n\n" + BC.DEFAULTS.question_hint); // 1 word -> low effort
+  assert.equal(t.calls[2].history[1].content, "first"); // the hint never enters history
   assert.deepEqual(t.calls[1].history.map((m) => m.role), ["assistant"]);
   assert.deepEqual(t.calls[2].history.map((m) => m.role), ["assistant", "user", "assistant"]);
   // The model sees its own earlier JSON, so it keeps the format and can avoid repeats.
@@ -272,4 +277,46 @@ test("enforce_word_limit off: long replies pass through with no extra call", asy
   await t.chat.start();
   assert.equal(t.calls.length, 1);
   assert.equal(t.chat.state.records[0].over_limit, 1);
+});
+
+// ---------- question / statement endings ----------
+test("endingHint: opening and even turns ask, odd turns don't, low effort always asks", () => {
+  const cfg = BC.DEFAULTS;
+  const long = "I think it depends a lot on the couple and how they communicate";
+  assert.equal(BC.endingHint(cfg, 0, ""), cfg.question_hint);
+  assert.equal(BC.endingHint(cfg, 1, long), cfg.statement_hint);
+  assert.equal(BC.endingHint(cfg, 2, long), cfg.question_hint);
+  assert.equal(BC.endingHint(cfg, 3, long), cfg.statement_hint);
+  assert.equal(BC.endingHint(cfg, 3, "idk"), cfg.question_hint);
+  assert.equal(BC.endingHint(cfg, 1, "idk, maybe it depends on them"), cfg.question_hint);
+  assert.equal(BC.endingHint(Object.assign({}, cfg, { alternate_questions: false }), 0, ""), "");
+});
+
+test("isLowEffort: short or noncommittal, but not substantive messages that start with 'no'/'yeah'", () => {
+  assert.equal(BC.isLowEffort("probably emergencies mostly"), true);
+  assert.equal(BC.isLowEffort("kinda tired, just doing this for psych credit"), false);
+  assert.equal(BC.isLowEffort("i guess it could go either way honestly"), true);
+  assert.equal(BC.isLowEffort("No, I think couples who live together first learn a lot about each other"), false);
+  assert.equal(BC.isLowEffort("Yeah but what about people who move in way too fast and regret it"), false);
+});
+
+test("the ending hint is sent with the request but never stored as the participant's words", async () => {
+  const long = "I think it depends a lot on the couple and how they communicate";
+  const t = setup([good(0), good(1), good(2)], { max_messages: 5 });
+  await t.chat.start();
+  assert.match(t.calls[0].prompt, /end with one short, easy question/);
+  await t.say(long);
+  assert.equal(t.calls[1].prompt, long + "\n\n" + BC.DEFAULTS.statement_hint);
+  assert.equal(t.log.msg_1, long);
+  await t.say("idk");
+  assert.equal(t.calls[2].prompt, "idk\n\n" + BC.DEFAULTS.question_hint);
+  assert.deepEqual(t.chat.state.history.filter((m) => m.role === "user").map((m) => m.content), [long, "idk"]);
+});
+
+test("alternate_questions off: prompts go through unchanged", async () => {
+  const t = setup([good(0), good(1)], { alternate_questions: false });
+  await t.chat.start();
+  await t.say("hello there");
+  assert.equal(t.calls[1].prompt, "hello there");
+  assert.doesNotMatch(t.calls[0].prompt, /Instruction for this reply/);
 });

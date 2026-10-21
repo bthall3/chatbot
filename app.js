@@ -4,7 +4,7 @@
 
   var PAGE = window.PAGE_CONFIG || {};
   var MOCK = /[?&]mock=1\b/.test(location.search);
-  var SETTINGS_KEY = "balancedChat.settings.v8"; // v8: neutrality / no research claims, 60-word limit
+  var SETTINGS_KEY = "balancedChat.settings.v9"; // v9: concise/casual prompt, alternating questions
 
   var TOPICS = [
     "People in romantic relationships should not have opposite-sex friendships.",
@@ -21,7 +21,7 @@
 
   var EDITABLE = [
     "prompt_template", "opening_template", "proxy_url", "model", "reasoning_effort", "temperature", "max_tokens", "word_limit",
-    "max_messages", "delay_ms_per_word", "enforce_word_limit"
+    "max_messages", "delay_ms_per_word", "enforce_word_limit", "alternate_questions"
   ];
   var NUMERIC = { temperature: 1, max_tokens: 1, word_limit: 1, max_messages: 1, delay_ms_per_word: 1 };
 
