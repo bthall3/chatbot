@@ -58,7 +58,7 @@ Add `?mock=1` to the URL to test the page without calling the API:
 ## Known limitations
 - **Third party:** feedback emails pass through Web3Forms. Fine for pilot testing; don't use it with participant data.
 - **Public page:** anyone with the URL can use the proxy, which spends API credit.
-- **Length confound:** about 50 words per reply here versus 30 in the launched arms.
+- **Length confound:** about 60 words per reply here versus 30 in the launched arms.
 - **Model shutdown:** `gpt-4.1-nano`, the model used by the launched arms, is scheduled to shut down on Oct 23, 2026, per OpenAI's deprecations page.
 - **Shift detection:** the model judges `stance` itself. Check `stance_N` against the transcripts during piloting. After a shift, the two sides are no longer equally weighted, so balance varies by participant; account for this in analysis.
 - **Self-reported balance:** the page can't see inside free prose, so `support_N` and `dissent_N` are the model's own account of what it wove in. Spot-check them against `response_N` during piloting.

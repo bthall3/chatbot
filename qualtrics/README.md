@@ -36,7 +36,7 @@ The existing custom CSS (`#chat-container`, `.bot-message`, …) already styles 
 
 ## Differences from the launched arms (note these in the methods)
 - The bot writes conversational replies with one supporting and one challenging consideration woven into every message. `support_N` and `dissent_N` are the model's own summaries of those two points.
-- Replies are capped at about 50 words instead of 30, because each one has to fit both considerations. A reply that's still long after one rewrite request is shown and flagged, not cut.
+- Replies are capped at about 60 words instead of 30, because each one has to fit both considerations. A reply that's still long after one rewrite request is shown and flagged, not cut.
 - The opening message is itself a balanced, conversational reply, not the generic "warm" opener the other arms use.
 - The 5th participant message gets no API call. The launched arms generate `response_5` but never show it.
 - While a reply is pending, the input is locked. A failed request asks the participant to resend instead of failing silently.

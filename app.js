@@ -4,7 +4,7 @@
 
   var PAGE = window.PAGE_CONFIG || {};
   var MOCK = /[?&]mock=1\b/.test(location.search);
-  var SETTINGS_KEY = "balancedChat.settings.v7"; // v7: model writes the whole conversational message
+  var SETTINGS_KEY = "balancedChat.settings.v8"; // v8: neutrality / no research claims, 60-word limit
 
   var TOPICS = [
     "People in romantic relationships should not have opposite-sex friendships.",

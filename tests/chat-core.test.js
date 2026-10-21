@@ -100,8 +100,11 @@ test("prompt: conversational, balance woven into every message, follows shifts",
   assert.match(sys, /In EVERY message, weave in/);
   assert.match(sys, /No lists, no labels/);
   assert.match(sys, /Follow the participant/);
-  assert.match(sys, /about 10 words/); // {soft_words} at the 50-word limit
-  assert.match(sys, /under 50 words/);
+  assert.match(sys, /about 12 words/); // {soft_words} at the 60-word limit
+  assert.match(sys, /under 60 words/);
+  assert.match(sys, /never agree with, praise or grade/);
+  assert.match(sys, /Don.t claim that "research shows"/);
+  assert.match(sys, /only about half of your messages/);
   assert.match(sys, /\{"stance":"","message":"","support":"","dissent":""\}/);
   assert.doesNotMatch(sys, /\{(topic|p_response|word_limit|soft_words)\}/);
 });
@@ -117,7 +120,7 @@ test("the example messages in the prompt respect the default word limit", () => 
   for (const ex of examples) {
     const p = BC.parseBalancedReply(ex);
     assert.equal(p.ok, true);
-    assert.ok(BC.countWords(p.parts.message) <= 50, p.parts.message);
+    assert.ok(BC.countWords(p.parts.message) <= BC.DEFAULTS.word_limit, p.parts.message);
   }
 });
 
