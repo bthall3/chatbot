@@ -25,7 +25,7 @@ The bot is a **conversation partner first**. It replies to what the participant 
 
 **Following the participant:** "support" and "dissent" are relative to where the participant stands *now*, not just their opening view. If they start agreeing with the other side, the bot follows. Its main point builds on their new leaning, and the counterpoint becomes a brief, gentle "worth keeping in mind" from the side they moved away from (about half as long), never a rebuttal. While they hold their original view, both points are equally strong.
 
-The model writes the whole message itself, and the page shows it as-is. It answers in JSON (`stance`, `message`, `support`, `dissent`). `message` is what the participant reads. `support` and `dissent` are the model's short summaries of the two considerations it wove in; they're logged, never shown. A turn only counts as balanced if both are present; otherwise the page retries once.
+The model writes the whole message itself, and the page shows it as-is. It answers in JSON (`stance`, `message`, `support`, `dissent`). `message` is what the participant reads. `support` and `dissent` are the model's short summaries of the two considerations it wove in; they're logged, never shown. A turn only counts as valid if it has the considerations its condition calls for (both for balanced, only a supporting one for congenial, only a challenging one for uncongenial). An unreadable reply is retried once; a readable one that points the wrong way gets one targeted repair request naming the part to drop or add.
 
 ## Using the page
 Open the GitHub Pages URL; mock mode is described further down.
@@ -68,7 +68,7 @@ Add `?mock=1` to the URL to test the page without calling the API:
 - `support_N`, `dissent_N`: the model's summary of the consideration it wove in for the participant's current leaning, and the one from the other side. After a shift, the dissent is the gentle counterpoint.
 - `stance_N`: the model's read of the participant: `original`, `shifted` or `mixed`.
 - `words_N`: word count of the reply as shown.
-- `parse_ok_N`: `0` if the model ignored the format and the raw reply was shown.
+- `parse_ok_N`: `0` if the reply was unreadable (raw text shown) or pointed the wrong way for the condition after one retry (the model's message is shown; `support_N`/`dissent_N` show what it reported).
 - `error_N`: network or format problems on that turn.
 
 ## Known limitations

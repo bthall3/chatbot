@@ -63,7 +63,7 @@ var BalancedChat = (function () {
     },
     congenial: {
       rules: [
-        "In EVERY message, weave in naturally ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that supports the view they currently lean toward and that they have NOT already mentioned. Don't bring up considerations against it. Leave \"dissent\" empty.",
+        "In EVERY message, weave in naturally ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that supports the view they currently lean toward and that they have NOT already mentioned. Don't bring up anything against it, even briefly: no caveats, no \"but...\", no \"on the other hand\". Leave \"dissent\" empty.",
         "Follow the participant. Judge where they lean NOW from the whole conversation; if they have shifted toward the other side, your consideration supports their new leaning."
       ].join("\n"),
       examples: [
@@ -80,7 +80,7 @@ var BalancedChat = (function () {
     },
     uncongenial: {
       rules: [
-        "In EVERY message, weave in naturally ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that challenges the view they currently lean toward and that they have NOT already mentioned. Don't bring up considerations for it. Leave \"support\" empty.",
+        "In EVERY message, weave in naturally ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that challenges the view they currently lean toward and that they have NOT already mentioned. Don't bring up anything for it, even briefly: no conceding first, no \"that's true, but...\", no \"X can help, but\". Leave \"support\" empty.",
         "Follow the participant. Judge where they lean NOW from the whole conversation; if they have shifted toward the other side, your consideration challenges their new leaning."
       ].join("\n"),
       examples: [
@@ -213,10 +213,16 @@ var BalancedChat = (function () {
     var end = raw.lastIndexOf("}");
     if (start === -1 || end <= start) return { ok: false, parts: null, raw: raw };
     var obj;
+    var body = raw.slice(start, end + 1);
     try {
-      obj = JSON.parse(raw.slice(start, end + 1));
+      obj = JSON.parse(body);
     } catch (e) {
-      return { ok: false, parts: null, raw: raw };
+      // The model sometimes closes with a stray comma or quote: ..."dissent":"x","}
+      try {
+        obj = JSON.parse(body.replace(/,\s*"?\s*\}$/, "}"));
+      } catch (e2) {
+        return { ok: false, parts: null, raw: raw };
+      }
     }
     var stance = asText(obj.stance).toLowerCase();
     var parts = {
@@ -362,17 +368,43 @@ var BalancedChat = (function () {
         });
     }
 
-    // Calls the model; if the reply isn't valid balanced JSON, retries once.
+    // Calls the model. An unreadable reply is retried once as-is; a readable one
+    // that points the wrong way for the condition gets one targeted repair request.
     function getBalancedReply(history, prompt, turn) {
       return callProxy(history, prompt).then(function (text) {
         var parsed = parseBalancedReply(text, condition);
         if (parsed.ok) return enforceLimit(history, prompt, parsed, turn);
-        logError(turn, "unparseable reply, retried");
-        return callProxy(history, prompt).then(function (text2) {
+        var readable = parsed.parts && parsed.parts.message;
+        var retryHistory = readable
+          ? history.concat([{ role: "user", content: prompt }, { role: "assistant", content: parsed.raw }])
+          : history;
+        var retryPrompt = readable ? repairPrompt(parsed.parts) : prompt;
+        logError(turn, readable ? "wrong direction for condition, asked for repair" : "unparseable reply, retried");
+        return callProxy(retryHistory, retryPrompt).then(function (text2) {
           var parsed2 = parseBalancedReply(text2, condition);
-          return parsed2.ok ? enforceLimit(history, prompt, parsed2, turn) : { ok: false, parts: null, raw: text2 };
+          if (parsed2.ok) return enforceLimit(history, prompt, parsed2, turn);
+          return parsed2.parts && parsed2.parts.message ? parsed2 : readable ? parsed : parsed2;
         });
       });
+    }
+
+    // Names what's wrong with a readable reply so the rewrite can fix just that.
+    function repairPrompt(parts) {
+      var fix;
+      if (condition === "congenial" && parts.dissent) {
+        fix = "Your message also included a point against their view (\"" + parts.dissent + "\"). Rewrite it without that, " +
+          "keeping only a consideration that supports their current leaning. Leave \"dissent\" empty.";
+      } else if (condition === "uncongenial" && parts.support) {
+        fix = "Your message also included a point in favor of their view (\"" + parts.support + "\"), even if only as a lead-in. " +
+          "Rewrite it without that: react to what they said without conceding anything, then give only a consideration " +
+          "that challenges their current leaning. Leave \"support\" empty.";
+      } else {
+        var needed = condition === "congenial" ? "a consideration that supports their current leaning"
+          : condition === "uncongenial" ? "a consideration that challenges their current leaning"
+          : !parts.support ? "a consideration that supports their current leaning" : "a consideration that challenges it";
+        fix = "Your message was missing " + needed + ". Rewrite it with that woven in.";
+      }
+      return fix + " Keep the same tone and length. Respond ONLY with the JSON.";
     }
 
     // Over the limit: ask once for a shorter rewrite. Free prose can't be cut
@@ -407,7 +439,10 @@ var BalancedChat = (function () {
     }
 
     function recordTurn(turn, userMessage, parsed) {
-      var shown = parsed.ok ? parsed.parts.message : parsed.raw.trim();
+      // Invalid for the condition but readable: show the model's message (the turn
+      // is flagged parse_ok 0), never the raw JSON. Unreadable: show the raw text.
+      var readable = parsed.parts && parsed.parts.message;
+      var shown = parsed.ok ? parsed.parts.message : readable ? parsed.parts.message : parsed.raw.trim();
       // "idk" / "maybe" is not a change of mind: keep the previous stance even if
       // the model read it as one.
       var prev = null;
@@ -415,7 +450,7 @@ var BalancedChat = (function () {
         if (state.records[i].stance) prev = state.records[i].stance;
       }
       var overridden = 0;
-      if (parsed.ok && turn > 0 && prev && isNoncommittal(userMessage) && parsed.parts.stance !== prev) {
+      if (readable && turn > 0 && prev && isNoncommittal(userMessage) && parsed.parts.stance !== prev) {
         parsed.parts.stance = prev;
         overridden = 1;
       }
@@ -425,7 +460,7 @@ var BalancedChat = (function () {
         shown: shown,
         parts: parsed.parts,
         raw: parsed.raw,
-        stance: parsed.ok ? parsed.parts.stance : "",
+        stance: readable ? parsed.parts.stance : "",
         stance_overridden: overridden,
         parse_ok: parsed.ok ? 1 : 0,
         words: countWords(shown),
@@ -433,8 +468,8 @@ var BalancedChat = (function () {
       };
       if (turn > 0) store.set("msg_" + turn, userMessage);
       store.set("response_" + turn, shown);
-      store.set("support_" + turn, parsed.ok ? parsed.parts.support : "");
-      store.set("dissent_" + turn, parsed.ok ? parsed.parts.dissent : "");
+      store.set("support_" + turn, readable ? parsed.parts.support : "");
+      store.set("dissent_" + turn, readable ? parsed.parts.dissent : "");
       store.set("stance_" + turn, record.stance);
       store.set("parse_ok_" + turn, String(record.parse_ok));
       store.set("words_" + turn, String(record.words));
