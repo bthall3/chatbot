@@ -5,10 +5,10 @@ This is a test page for the study's information-exposure chatbots, from the sele
 | Condition | In every message |
 |---|---|
 | **balanced** | one consideration for the participant's current view **and** one against it |
-| **congenial** | one consideration **for** their current view, nothing against |
-| **uncongenial** | one consideration **against** their current view, nothing for |
+| **congenial** | one consideration **for** their *original* view (the one they wrote before the chat) |
+| **uncongenial** | one consideration **against** their *original* view |
 
-All three use **the same prompt**. Only the condition rules (`{condition_rules}`) and the worked examples (`{examples}`) differ; a unit test checks that everything else is identical. "Current view" follows the participant: after a shift, congenial backs their new leaning and uncongenial challenges it. Congenial and uncongenial give one consideration per message versus two for balanced, so amount of information is confounded with direction.
+All three use **the same prompt**. Only the condition rules (`{condition_rules}`) and the worked examples (`{examples}`) differ; a unit test checks that everything else is identical. The directional bots stay anchored to the participant's **original** view for the whole chat, as in selective exposure designs. Congenial keeps backing it even if they start to doubt it, and uncongenial keeps challenging it. They may briefly acknowledge what the participant said (e.g. "that can help, but…") as long as each message clearly lands on their side. The balanced bot instead follows the participant's *current* leaning (see below). Congenial and uncongenial give one consideration per message versus two for balanced, so amount of information is confounded with direction.
 
 The rest of this README describes the balanced bot; the same style, length, neutrality and question rules apply to all three.
 

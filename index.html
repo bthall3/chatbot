@@ -5,13 +5,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chatbot Lab</title>
-  <link rel="stylesheet" href="styles.css?v=2026-10-23.1">
+  <link rel="stylesheet" href="styles.css?v=2026-10-23.2">
 </head>
 <body>
   <header class="topbar">
     <h1>Chatbot Lab</h1>
     <p>Test the study chatbots. <strong>Balanced</strong> weaves one point <em>for</em> your view and one <em>against</em> it into each reply; <strong>congenial</strong> gives only a point for it; <strong>uncongenial</strong> only a point against it.</p>
-    <small class="muted" id="version">Version 2026-10-23.1 (congenial / uncongenial bots)</small>
+    <small class="muted" id="version">Version 2026-10-23.2 (directional bots anchored to original view)</small>
     <span id="mock-badge" class="badge" hidden>Mock mode: no real API calls</span>
   </header>
 
@@ -23,8 +23,8 @@
         <label>Bot condition
           <select name="condition">
             <option value="balanced">Balanced (one for, one against)</option>
-            <option value="congenial">Congenial (supporting only)</option>
-            <option value="uncongenial">Uncongenial (challenging only)</option>
+            <option value="congenial">Congenial (supports their original view)</option>
+            <option value="uncongenial">Uncongenial (challenges their original view)</option>
           </select>
           <small>Same prompt for all three; only the condition rules and examples change. Click Apply to switch.</small>
         </label>
@@ -120,8 +120,8 @@
     </section>
   </main>
 
-  <script src="config.js?v=2026-10-23.1"></script>
-  <script src="chat-core.js?v=2026-10-23.1"></script>
-  <script src="app.js?v=2026-10-23.1"></script>
+  <script src="config.js?v=2026-10-23.2"></script>
+  <script src="chat-core.js?v=2026-10-23.2"></script>
+  <script src="app.js?v=2026-10-23.2"></script>
 </body>
 </html>

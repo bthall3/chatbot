@@ -121,7 +121,7 @@ test("older saved prompts with removed placeholders still fill in", () => {
 test("each condition's examples are valid for that condition and within the word limit", () => {
   for (const [cond, c] of Object.entries(BC.CONDITIONS)) {
     const examples = c.examples.split("\n").filter((l) => l.startsWith('{"stance"'));
-    assert.equal(examples.length, 4, cond);
+    assert.equal(examples.length, 5, cond);
     for (const ex of examples) {
       const p = BC.parseBalancedReply(ex, cond);
       assert.equal(p.ok, true, cond + ": " + ex);
@@ -146,40 +146,44 @@ test("the three conditions' prompts are identical except for the rules and examp
   assert.equal(stripped[0], stripped[2]);
 });
 
-test("condition rules point in the right direction", () => {
+test("condition rules point in the right direction and anchor directional bots to the original view", () => {
   const sys = (cond) => BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: cond }), { topic: "T", p_response: "R" });
-  assert.match(sys("congenial"), /ONE fresh, concrete consideration .* that supports the view they currently lean toward/);
-  assert.match(sys("congenial"), /Don't bring up anything against it/);
-  assert.match(sys("uncongenial"), /ONE fresh, concrete consideration .* that challenges the view they currently lean toward/);
-  assert.match(sys("uncongenial"), /Don't bring up anything for it/);
+  for (const cond of ["congenial", "uncongenial"]) {
+    assert.match(sys(cond), /stays your reference point for the WHOLE conversation, even if they start to change their mind/);
+    assert.doesNotMatch(sys(cond), /view they currently lean toward/);
+  }
+  assert.match(sys("congenial"), /supports that original view/);
+  assert.match(sys("congenial"), /must clearly land in support of their original view/);
+  assert.match(sys("uncongenial"), /challenges that original view/);
+  assert.match(sys("uncongenial"), /must clearly land against their original view/);
   assert.match(sys("balanced"), /even-handed/);
+  assert.match(sys("balanced"), /supports the view they currently lean toward/);
   assert.equal(BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: "nonsense" }), { topic: "T", p_response: "R" }), sys("balanced"));
 });
 
-test("validity depends on the condition", () => {
+test("validity depends on the condition; directional bots may also report an acknowledgment of the other side", () => {
   const both = '{"message":"m","support":"a","dissent":"b"}';
   const forOnly = '{"message":"m","support":"a","dissent":""}';
   const againstOnly = '{"message":"m","support":"","dissent":"b"}';
   assert.deepEqual([both, forOnly, againstOnly].map((x) => BC.parseBalancedReply(x, "balanced").ok), [true, false, false]);
-  assert.deepEqual([both, forOnly, againstOnly].map((x) => BC.parseBalancedReply(x, "congenial").ok), [false, true, false]);
-  assert.deepEqual([both, forOnly, againstOnly].map((x) => BC.parseBalancedReply(x, "uncongenial").ok), [false, false, true]);
+  assert.deepEqual([both, forOnly, againstOnly].map((x) => BC.parseBalancedReply(x, "congenial").ok), [true, true, false]);
+  assert.deepEqual([both, forOnly, againstOnly].map((x) => BC.parseBalancedReply(x, "uncongenial").ok), [true, false, true]);
 });
 
-test("congenial chat: a reply with a counterpoint gets a targeted repair, and the rewrite request matches the condition", async () => {
+test("congenial chat: a reply missing its supporting point gets a targeted repair; rewrite request matches the condition", async () => {
   const forOnly = (m) => JSON.stringify({ stance: "original", message: m, support: "for", dissent: "" });
-  const t = setup([good(0), forOnly("Supportive reply.")], { condition: "congenial" });
+  const againstOnly = JSON.stringify({ stance: "original", message: "Only a challenge.", support: "", dissent: "against" });
+  const t = setup([againstOnly, forOnly("Supportive reply.")], { condition: "congenial" });
   await t.chat.start();
   assert.match(t.log.error_0, /asked for repair/);
-  assert.match(t.calls[1].prompt, /included a point against their view \("dissent 0"\)/);
+  assert.match(t.calls[1].prompt, /missing a consideration that supports their original view/);
   assert.equal(t.calls[1].history.length, 2); // original prompt + the reply being repaired
   assert.equal(t.log.response_0, "Supportive reply.");
-  assert.equal(t.log.dissent_0, "");
   const t2 = setup([forOnly(words(70)), forOnly(words(40))], { condition: "congenial" });
   await t2.chat.start();
   assert.match(t2.calls[1].prompt, /keeping the supporting consideration woven in/);
 });
 
-// ---------- stance override ----------
 test("isNoncommittal: filler only, not short concessions", () => {
   for (const m of ["idk", "idk maybe", "yeah probably", "i guess", "idk, i guess"]) assert.equal(BC.isNoncommittal(m), true, m);
   for (const m of ["ok you're right", "depends on the couple", "only when needed", "Okay, LeBron is better"]) assert.equal(BC.isNoncommittal(m), false, m);
@@ -391,21 +395,21 @@ test("alternate_questions off: prompts go through unchanged", async () => {
   assert.doesNotMatch(t.calls[0].prompt, /Instruction for this reply/);
 });
 
-test("a readable reply that points the wrong way shows its message, never raw JSON", async () => {
-  const both = JSON.stringify({ stance: "original", message: "Concede first, then challenge.", support: "a concession", dissent: "a challenge" });
-  const t = setup([both, both], { condition: "uncongenial" });
+test("a readable reply still missing its point after repair shows its message, never raw JSON", async () => {
+  const forOnly = JSON.stringify({ stance: "original", message: "Only agrees.", support: "a point for", dissent: "" });
+  const t = setup([forOnly, forOnly], { condition: "uncongenial" });
   await t.chat.start();
-  assert.equal(t.log.response_0, "Concede first, then challenge.");
+  assert.equal(t.log.response_0, "Only agrees.");
   assert.equal(t.log.parse_ok_0, "0");
-  assert.equal(t.log.support_0, "a concession");
+  assert.equal(t.log.support_0, "a point for");
   assert.equal(t.log.stance_0, "original");
   assert.doesNotMatch(t.bubbles().at(-1), /^\{/);
 });
 
-test("directional rules forbid even brief counter-points", () => {
+test("directional bots may concede briefly but must land on their side", () => {
   const sys = (cond) => BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: cond }), { topic: "T", p_response: "R" });
-  assert.match(sys("congenial"), /Don't bring up anything against it, even briefly/);
-  assert.match(sys("uncongenial"), /Don't bring up anything for it, even briefly: no conceding first/);
+  assert.match(sys("congenial"), /You may briefly acknowledge something they said, but each message must clearly land in support/);
+  assert.match(sys("uncongenial"), /You may briefly acknowledge something they said, but each message must clearly land against/);
 });
 
 test("lenient parsing: a stray trailing comma or quote before } is tolerated", () => {
@@ -415,13 +419,12 @@ test("lenient parsing: a stray trailing comma or quote before } is tolerated", (
   assert.equal(BC.parseBalancedReply('{"message":"m","support":"a","dissent":"b",}').ok, true);
 });
 
-test("uncongenial repair names the concession it must drop", async () => {
-  const both = JSON.stringify({ stance: "original", message: "Concede, then challenge.", support: "living together reveals habits", dissent: "talks can too" });
-  const fixed = JSON.stringify({ stance: "original", message: "Challenge only.", support: "", dissent: "talks can too" });
-  const t = setup([both, fixed], { condition: "uncongenial" });
+test("an uncongenial message that concedes first but challenges is accepted without a repair", async () => {
+  const conceding = JSON.stringify({ stance: "original", message: "That can help, but here's the catch.", support: "that can help", dissent: "the catch" });
+  const t = setup([conceding], { condition: "uncongenial" });
   await t.chat.start();
-  assert.match(t.calls[1].prompt, /point in favor of their view \("living together reveals habits"\)/);
-  assert.match(t.calls[1].prompt, /without conceding anything/);
-  assert.equal(t.log.response_0, "Challenge only.");
+  assert.equal(t.calls.length, 1);
   assert.equal(t.log.parse_ok_0, "1");
+  assert.equal(t.log.dissent_0, "the catch");
 });
+

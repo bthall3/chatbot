@@ -30,7 +30,7 @@ var BalancedChat = (function () {
     'Respond ONLY with JSON: {"stance":"","message":"","support":"","dissent":""}',
     'stance: "original" (still holds their starting view), "shifted" (now leaning toward the other side) or "mixed" (undecided or partly persuaded). Asking a question does not by itself change their stance, and short, noncommittal or off-topic replies ("idk", "maybe", "i guess", "ok") are NOT a shift: keep the previous stance.',
     "message: exactly what the participant will read.",
-    "support: a short summary of any consideration you wove in that supports their current leaning; dissent: a short summary of any consideration that challenges it. Leave a field empty if there is none. (For the researchers; not shown.)",
+    "support: a short summary of the consideration you wove in that supports the view your instructions above focus on; dissent: a short summary of one that challenges that view. Leave a field empty if there is none; a brief acknowledgment of what they said doesn't count. (For the researchers; not shown.)",
     "",
     "{examples}"
   ].join("\n");
@@ -38,6 +38,7 @@ var BalancedChat = (function () {
   var EX_OPEN = 'Example (topic: Michael Jordan is the GOAT. Participant: "Yes, he was the most dominant player ever."):';
   var EX_ASK = 'Later the participant asks: "But didn\'t LeBron lose a lot of Finals?"';
   var EX_IDK = 'Later the participant says: "idk"';
+  var EX_STORY = 'Later the participant says: "My dad says nobody was scarier in a big game than Jordan."';
   var EX_SHIFT = 'Later still the participant says: "Okay, LeBron\'s longevity is hard to argue with."';
 
   // The only parts of the prompt that differ between conditions.
@@ -54,6 +55,8 @@ var BalancedChat = (function () {
         '{"stance":"original","message":"A lot of people settle it on dominance. He went 6-0 in the Finals and never needed a Game 7. But LeBron has more career points and stayed elite way longer. Does how long someone\'s great matter to you?","support":"Jordan went 6-0 in the Finals without a Game 7","dissent":"LeBron has more career points and a longer elite run"}',
         EX_ASK,
         '{"stance":"original","message":"He did, 4-6. That\'s why Jordan\'s perfect Finals record gets so much weight. Then again, LeBron made ten Finals to Jordan\'s six, and getting there that often is its own kind of consistency.","support":"Jordan\'s perfect Finals record versus LeBron\'s 4-6","dissent":"LeBron reached ten Finals to Jordan\'s six"}',
+        EX_STORY,
+        '{"stance":"original","message":"Did he get to watch those games live? Jordan won Finals MVP all six times he made it there, though LeBron made eight straight Finals, a run Jordan never had.","support":"Jordan won Finals MVP in all six of his Finals","dissent":"LeBron made eight straight Finals"}',
         EX_IDK,
         '{"stance":"original","message":"Jordan never lost a Finals, but LeBron stayed elite for 20+ seasons. Peak or longevity, if you had to pick one?","support":"Jordan never lost a Finals","dissent":"LeBron stayed elite for 20+ seasons"}',
         EX_SHIFT,
@@ -63,35 +66,39 @@ var BalancedChat = (function () {
     },
     congenial: {
       rules: [
-        "In EVERY message, weave in naturally ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that supports the view they currently lean toward and that they have NOT already mentioned. Don't bring up anything against it, even briefly: no caveats, no \"but...\", no \"on the other hand\". Leave \"dissent\" empty.",
-        "Follow the participant. Judge where they lean NOW from the whole conversation; if they have shifted toward the other side, your consideration supports their new leaning."
+        "Their view is the position in their written explanation above, and it stays your reference point for the WHOLE conversation, even if they start to change their mind.",
+        "In EVERY message, weave in naturally ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that supports that original view and that they have NOT already mentioned. You may briefly acknowledge something they said, but each message must clearly land in support of their original view; never make a reason against it your point. Leave \"dissent\" empty."
       ].join("\n"),
       examples: [
         EX_OPEN,
         '{"stance":"original","message":"A lot of people settle it on dominance. He went 6-0 in the Finals and never needed a Game 7. Does how someone performs on the biggest stage matter most to you?","support":"Jordan went 6-0 in the Finals without a Game 7","dissent":""}',
         EX_ASK,
         '{"stance":"original","message":"He did, 4-6. That\'s a big reason Jordan\'s perfect Finals record carries so much weight when people compare them.","support":"Jordan\'s perfect Finals record versus LeBron\'s 4-6","dissent":""}',
+        EX_STORY,
+        '{"stance":"original","message":"Did he get to watch those games live? Jordan won Finals MVP all six times he made it there.","support":"Jordan won Finals MVP in all six of his Finals","dissent":""}',
         EX_IDK,
         '{"stance":"original","message":"Jordan won six titles in eight seasons, which is hard to match. Titles or stats, which counts more for you?","support":"Jordan won six titles in eight seasons","dissent":""}',
         EX_SHIFT,
-        '{"stance":"shifted","message":"Twenty-plus seasons near the top is rare, and he has a record 13 All-NBA First Teams. Peak or career, which matters more to you now?","support":"LeBron\'s record 13 All-NBA First Teams","dissent":""}'
+        '{"stance":"shifted","message":"Longevity is a real argument. Still, Jordan went 6-for-6 in the Finals and never needed a Game 7, which a long career alone doesn\'t match. Peak or career, which matters more to you now?","support":"Jordan\'s six-for-six Finals record","dissent":""}'
       ].join("\n"),
       rewrite: "keeping the supporting consideration woven in"
     },
     uncongenial: {
       rules: [
-        "In EVERY message, weave in naturally ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that challenges the view they currently lean toward and that they have NOT already mentioned. Don't bring up anything for it, even briefly: no conceding first, no \"that's true, but...\", no \"X can help, but\". Leave \"support\" empty.",
-        "Follow the participant. Judge where they lean NOW from the whole conversation; if they have shifted toward the other side, your consideration challenges their new leaning."
+        "Their view is the position in their written explanation above, and it stays your reference point for the WHOLE conversation, even if they start to change their mind.",
+        "In EVERY message, weave in naturally ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that challenges that original view and that they have NOT already mentioned. You may briefly acknowledge something they said, but each message must clearly land against their original view; never make a reason for it your point. Leave \"support\" empty."
       ].join("\n"),
       examples: [
         EX_OPEN,
         '{"stance":"original","message":"A lot of people settle it on dominance. But LeBron has more career points and stayed elite way longer. Does how long someone\'s great matter to you?","support":"","dissent":"LeBron has more career points and a longer elite run"}',
         EX_ASK,
         '{"stance":"original","message":"He did, 4-6. Then again, LeBron made ten Finals to Jordan\'s six, and getting there that often is its own kind of consistency.","support":"","dissent":"LeBron reached ten Finals to Jordan\'s six"}',
+        EX_STORY,
+        '{"stance":"original","message":"Did he get to watch those games live? LeBron made eight straight Finals, a run Jordan never had.","support":"","dissent":"LeBron made eight straight Finals"}',
         EX_IDK,
         '{"stance":"original","message":"LeBron stayed elite for 20+ seasons, way longer than Jordan. Peak or longevity, if you had to pick one?","support":"","dissent":"LeBron stayed elite for 20+ seasons"}',
         EX_SHIFT,
-        '{"stance":"shifted","message":"Jordan still went 6-for-6 in the Finals and never needed a Game 7, which longevity alone doesn\'t match. Peak or career, which matters more to you now?","support":"","dissent":"Jordan\'s six-for-six Finals record"}'
+        '{"stance":"shifted","message":"Twenty-plus seasons near the top is rare, and he also has a record 13 All-NBA First Teams. Peak or career, which matters more to you now?","support":"","dissent":"LeBron\'s record 13 All-NBA First Teams"}'
       ].join("\n"),
       rewrite: "keeping the challenging consideration woven in"
     }
@@ -113,7 +120,9 @@ var BalancedChat = (function () {
     max_tokens: 300,
     word_limit: 60,
     max_messages: 5,
-    condition: "balanced", // "balanced" | "congenial" (supporting only) | "uncongenial" (challenging only)
+    // "balanced" (for + against their current leaning) | "congenial" (supports their
+    // original view) | "uncongenial" (challenges their original view)
+    condition: "balanced",
     delay_ms_per_word: 200,
     max_delay_ms: 8000,
     request_timeout_ms: 20000,
@@ -206,7 +215,8 @@ var BalancedChat = (function () {
 
   // Accepts clean JSON, ```json fenced``` JSON, or JSON surrounded by prose.
   // What a valid turn must contain depends on the condition: balanced needs both
-  // considerations, congenial only a supporting one, uncongenial only a challenging one.
+  // considerations; congenial needs one supporting, uncongenial one challenging
+  // the participant's original view.
   function parseBalancedReply(text, condition) {
     var raw = typeof text === "string" ? text : "";
     var start = raw.indexOf("{");
@@ -234,9 +244,11 @@ var BalancedChat = (function () {
     // A turn counts as balanced only if the model wrote a message and reports
     // both a supporting and a challenging consideration woven into it.
     var cond = CONDITIONS[condition] ? condition : "balanced";
+    // Directional bots may briefly acknowledge the other side (it can show up in
+    // the other field); what matters is that their own consideration is there.
     var ok = !!parts.message && (
-      cond === "congenial" ? !!parts.support && !parts.dissent :
-      cond === "uncongenial" ? !!parts.dissent && !parts.support :
+      cond === "congenial" ? !!parts.support :
+      cond === "uncongenial" ? !!parts.dissent :
       !!parts.support && !!parts.dissent
     );
     return { ok: ok, parts: parts, raw: raw };
@@ -388,22 +400,12 @@ var BalancedChat = (function () {
       });
     }
 
-    // Names what's wrong with a readable reply so the rewrite can fix just that.
+    // Names what's missing from a readable reply so the rewrite can fix just that.
     function repairPrompt(parts) {
-      var fix;
-      if (condition === "congenial" && parts.dissent) {
-        fix = "Your message also included a point against their view (\"" + parts.dissent + "\"). Rewrite it without that, " +
-          "keeping only a consideration that supports their current leaning. Leave \"dissent\" empty.";
-      } else if (condition === "uncongenial" && parts.support) {
-        fix = "Your message also included a point in favor of their view (\"" + parts.support + "\"), even if only as a lead-in. " +
-          "Rewrite it without that: react to what they said without conceding anything, then give only a consideration " +
-          "that challenges their current leaning. Leave \"support\" empty.";
-      } else {
-        var needed = condition === "congenial" ? "a consideration that supports their current leaning"
-          : condition === "uncongenial" ? "a consideration that challenges their current leaning"
-          : !parts.support ? "a consideration that supports their current leaning" : "a consideration that challenges it";
-        fix = "Your message was missing " + needed + ". Rewrite it with that woven in.";
-      }
+      var needed = condition === "congenial" ? "a consideration that supports their original view"
+        : condition === "uncongenial" ? "a consideration that challenges their original view"
+        : !parts.support ? "a consideration that supports their current leaning" : "a consideration that challenges it";
+      var fix = "Your message was missing " + needed + ". Rewrite it with that woven in.";
       return fix + " Keep the same tone and length. Respond ONLY with the JSON.";
     }
 
