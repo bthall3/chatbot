@@ -21,7 +21,7 @@ The existing custom CSS (`#chat-container`, `.bot-message`, …) already styles 
 ```
 
 ## 2. Survey flow
-- In the block randomizer, add a 4th group, **Balanced**. Give it an Embedded Data element with `cond = balanced`, followed by the new block.
+- In the block randomizer, add a group per arm you're running: **Balanced**, **Congenial** and/or **Uncongenial**. Give each an Embedded Data element with `cond = balanced`, `cond = congenial` or `cond = uncongenial`, followed by a chat block. All three use the same question JavaScript; the adapter reads `cond` and switches the condition, so the prompts stay identical except for the direction rules and examples.
   - Don't set `model`, `temperature`, or `prompt` there. The adapter takes those from `cfg` and the defaults.
 - Declare these fields in an Embedded Data element **before** the randomizer, with no value, so `setEmbeddedData` saves them:
   - `msg_1` … `msg_5`, `response_0` … `response_4` (already declared for the other arms)

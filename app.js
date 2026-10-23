@@ -4,7 +4,7 @@
 
   var PAGE = window.PAGE_CONFIG || {};
   var MOCK = /[?&]mock=1\b/.test(location.search);
-  var SETTINGS_KEY = "balancedChat.settings.v9"; // v9: concise/casual prompt, alternating questions
+  var SETTINGS_KEY = "balancedChat.settings.v10"; // v10: shared template + bot conditions
 
   var TOPICS = [
     "People in romantic relationships should not have opposite-sex friendships.",
@@ -20,7 +20,7 @@
   var OTHER = "__other__";
 
   var EDITABLE = [
-    "prompt_template", "opening_template", "proxy_url", "model", "reasoning_effort", "temperature", "max_tokens", "word_limit",
+    "condition", "prompt_template", "opening_template", "proxy_url", "model", "reasoning_effort", "temperature", "max_tokens", "word_limit",
     "max_messages", "delay_ms_per_word", "enforce_word_limit", "alternate_questions"
   ];
   var NUMERIC = { temperature: 1, max_tokens: 1, word_limit: 1, max_messages: 1, delay_ms_per_word: 1 };
@@ -178,7 +178,7 @@
     $("chat-error").hidden = true;
     $("setup-form").hidden = true;
     $("chat-area").hidden = false;
-    $("topic-shown").textContent = vars.topic;
+    $("topic-shown").textContent = vars.topic + "  (" + cfg.condition + " bot)";
 
     var chat = BalancedChat.createChat({
       cfg: cfg,
@@ -243,6 +243,7 @@
       tester: $("tester-name").value.trim(),
       submitted_at: new Date().toISOString(),
       conversation_started: session.id,
+      condition: session.cfg.condition,
       topic: session.vars.topic,
       p_response: session.vars.p_response,
       settings: session.cfg,
@@ -273,6 +274,7 @@
   function reportText(rep) {
     var lines = [
       "Tester: " + (rep.tester || "(not given)"),
+      "Bot condition: " + rep.condition,
       "Submitted: " + rep.submitted_at + (rep.mock ? "  [MOCK MODE]" : ""),
       "Topic: " + rep.topic,
       "Participant explanation: " + rep.p_response,
@@ -341,7 +343,7 @@
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
         access_key: key,
-        subject: (PAGE.email_subject || "Balanced chatbot feedback") + (rep.tester ? " from " + rep.tester : ""),
+        subject: (PAGE.email_subject || "Chatbot feedback") + " [" + rep.condition + "]" + (rep.tester ? " from " + rep.tester : ""),
         from_name: rep.tester || "Balanced Chatbot Lab",
         message: text
       })
@@ -376,17 +378,20 @@
     return new Promise(function (resolve, reject) {
       setTimeout(function () {
         if (/FAIL/.test(body.prompt)) return reject(new Error("Simulated network error"));
+        var cond = session ? session.cfg.condition : "balanced";
+        var forPt = cond === "uncongenial" ? "" : "mock supporting point #" + mockCount;
+        var againstPt = cond === "congenial" ? "" : "mock challenging point #" + mockCount;
         var text = /BADJSON/.test(body.prompt)
           ? "Sorry, here is plain text instead of JSON."
           : JSON.stringify({
               stance: /you'?re right/i.test(body.prompt) ? "shifted" : "original",
-              message: (/\?\s*$/.test(body.prompt)
+              message: (/\?\s*(\n|$)/.test(body.prompt)
                 ? "Good question, here's a mock answer to it. "
                 : "That's a mock reaction to what you just said. ") +
-                "Mock supporting point #" + mockCount + " fits your view, though mock challenging point #" +
-                mockCount + " pulls the other way. Where does that leave you?",
-              support: "mock supporting point #" + mockCount,
-              dissent: "mock challenging point #" + mockCount
+                [forPt && forPt + " fits your view", againstPt && againstPt + " pulls the other way"]
+                  .filter(Boolean).join(", though ") + ".",
+              support: forPt,
+              dissent: againstPt
             });
         resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ text: text }); } });
       }, 250);

@@ -25,6 +25,11 @@ Qualtrics.SurveyEngine.addOnReady(function () {
     max_messages: 5
   };
 
+  // One script for all three arms: the survey flow sets `cond` to balanced,
+  // congenial or uncongenial. Anything else falls back to balanced.
+  var cond = ed("cond");
+  cfg.condition = BalancedChat.CONDITIONS[cond] ? cond : "balanced";
+
   var chat = BalancedChat.createChat({
     cfg: cfg,
     vars: { topic: ed("topic"), p_response: ed("p_response") },

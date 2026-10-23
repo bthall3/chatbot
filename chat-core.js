@@ -13,34 +13,93 @@
 var BalancedChat = (function () {
   "use strict";
 
+  // One shared prompt for all bots. Only {condition_rules} and {examples} differ
+  // between the balanced, congenial and uncongenial conditions (see CONDITIONS).
   var DEFAULT_PROMPT = [
     'You are chatting with a participant about the topic "{topic}". Why they hold their view: "{p_response}".',
     "Be a friendly, curious conversation partner, not a debate summary. Talk like a person texting a classmate: everyday words, short sentences, no academic phrasing. Respond to what they actually said, answer their questions directly, pick up their examples and words, and vary how you phrase things.",
     "Keep it concise: 2-3 short sentences, usually 25-40 words.",
-    "Your quiet goal is to keep their thinking even-handed. In EVERY message, weave in naturally:",
-    "- ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that supports the view they currently lean toward and that they have NOT already mentioned, and",
-    "- ONE fresh, concrete consideration that challenges it, about as strong and specific.",
-    "Work them into your sentences the way a person would in conversation. No lists, no labels like \"one point in your favor\", and don't make them sound like a pro/con checklist.",
-    "Follow the participant. Judge where they stand NOW from the whole conversation. If they have shifted toward the other side or are undecided, build on the direction they are moving in, and make the challenging consideration a brief, gentle thing to keep in mind from the side they moved away from (about {soft_words} words). Never rebut what they just conceded.",
+    "{condition_rules}",
+    "Every consideration must bear directly on the statement \"{topic}\" itself, not on side issues the conversation leads to (logistics, tips, how-tos). If the conversation drifts, tie your point back to the statement.",
+    "Work your consideration(s) into your sentences the way a person would in conversation. No lists, no labels like \"one point in your favor\", and don't make it sound like a checklist.",
     "Stay neutral about THEM as well as the topic: never agree with, praise or grade what they say. Don't use words like \"exactly\", \"right\", \"fair\", \"true\", \"makes sense\", \"that's valid\", \"good point\", \"strongest\", \"powerful\", \"thoughtful\" or \"meaningful\" about their views or arguments. Respond to the content instead. Never say which side is right.",
     "Don't claim that \"research shows\", \"studies find\" or \"research suggests\" anything unless it is a widely established finding you can name specifically. Otherwise put considerations as reasons, examples, or what some people or couples experience.",
-    "If their reply is short, noncommittal or off-topic (\"idk\", \"maybe\", \"i'm tired\", \"doing this for credit\"), keep yours under about 25 words: still include both considerations, briefly, then steer back to the topic with an easy question (an either/or works well). Never treat the chat as an assignment, never offer to write or summarize an answer for them, and never comment on their effort or mood.",
-    "Never reuse a consideration from earlier in the conversation. Don't start with stock phrases like \"I see\", \"I understand\", \"Great point\", \"That's a great point\" or \"Interesting\". Follow any instruction about whether to end with a question.",
+    "If their reply is short, noncommittal or off-topic (\"idk\", \"maybe\", \"i'm tired\", \"doing this for credit\"), keep yours under about 25 words: still include your consideration(s), briefly, then steer back to the topic with an easy question. Never treat the chat as an assignment, never offer to write or summarize an answer for them, and never comment on their effort or mood.",
+    "Never repeat a consideration, example or question you've already used in this conversation; check your earlier messages first. Vary your questions: don't keep starting with \"Would you\"; mix in what/how/why questions, either/or choices, or questions about their own experience. Don't start with stock phrases like \"I see\", \"I understand\", \"Great point\", \"That's a great point\" or \"Interesting\". Follow any instruction about whether to end with a question.",
     "Never go over {word_limit} words.",
     'Respond ONLY with JSON: {"stance":"","message":"","support":"","dissent":""}',
     'stance: "original" (still holds their starting view), "shifted" (now leaning toward the other side) or "mixed" (undecided or partly persuaded). Asking a question does not by itself change their stance, and short, noncommittal or off-topic replies ("idk", "maybe", "i guess", "ok") are NOT a shift: keep the previous stance.',
     "message: exactly what the participant will read.",
-    "support, dissent: a short summary of the supporting and the challenging consideration you wove into the message (for the researchers; not shown).",
+    "support: a short summary of any consideration you wove in that supports their current leaning; dissent: a short summary of any consideration that challenges it. Leave a field empty if there is none. (For the researchers; not shown.)",
     "",
-    'Example (topic: Michael Jordan is the GOAT. Participant: "Yes, he was the most dominant player ever."):',
-    '{"stance":"original","message":"A lot of people settle it on dominance. He went 6-0 in the Finals and never needed a Game 7. But LeBron has more career points and stayed elite way longer. Does how long someone\'s great matter to you?","support":"Jordan went 6-0 in the Finals without a Game 7","dissent":"LeBron has more career points and a longer elite run"}',
-    'Later the participant asks: "But didn\'t LeBron lose a lot of Finals?"',
-    '{"stance":"original","message":"He did, 4-6. That\'s why Jordan\'s perfect Finals record gets so much weight. Then again, LeBron made ten Finals to Jordan\'s six, and getting there that often is its own kind of consistency.","support":"Jordan\'s perfect Finals record versus LeBron\'s 4-6","dissent":"LeBron reached ten Finals to Jordan\'s six"}',
-    'Later the participant says: "idk"',
-    '{"stance":"original","message":"Jordan never lost a Finals, but LeBron stayed elite for 20+ seasons. Peak or longevity, if you had to pick one?","support":"Jordan never lost a Finals","dissent":"LeBron stayed elite for 20+ seasons"}',
-    'Later still the participant says: "Okay, LeBron\'s longevity is hard to argue with."',
-    '{"stance":"shifted","message":"Twenty-plus seasons near the top is rare, and he has a record 13 All-NBA First Teams. Jordan\'s 6-for-6 Finals run still keeps the debate alive, though. Peak or career, which matters more to you now?","support":"LeBron\'s record 13 All-NBA First Teams","dissent":"Jordan\'s six-for-six Finals record"}'
+    "{examples}"
   ].join("\n");
+
+  var EX_OPEN = 'Example (topic: Michael Jordan is the GOAT. Participant: "Yes, he was the most dominant player ever."):';
+  var EX_ASK = 'Later the participant asks: "But didn\'t LeBron lose a lot of Finals?"';
+  var EX_IDK = 'Later the participant says: "idk"';
+  var EX_SHIFT = 'Later still the participant says: "Okay, LeBron\'s longevity is hard to argue with."';
+
+  // The only parts of the prompt that differ between conditions.
+  var CONDITIONS = {
+    balanced: {
+      rules: [
+        "Your quiet goal is to keep their thinking even-handed. In EVERY message, weave in naturally:",
+        "- ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that supports the view they currently lean toward and that they have NOT already mentioned, and",
+        "- ONE fresh, concrete consideration that challenges it, about as strong and specific.",
+        "Follow the participant. Judge where they stand NOW from the whole conversation. If they have shifted toward the other side or are undecided, build on the direction they are moving in, and make the challenging consideration a brief, gentle thing to keep in mind from the side they moved away from (about {soft_words} words). Never rebut what they just conceded."
+      ].join("\n"),
+      examples: [
+        EX_OPEN,
+        '{"stance":"original","message":"A lot of people settle it on dominance. He went 6-0 in the Finals and never needed a Game 7. But LeBron has more career points and stayed elite way longer. Does how long someone\'s great matter to you?","support":"Jordan went 6-0 in the Finals without a Game 7","dissent":"LeBron has more career points and a longer elite run"}',
+        EX_ASK,
+        '{"stance":"original","message":"He did, 4-6. That\'s why Jordan\'s perfect Finals record gets so much weight. Then again, LeBron made ten Finals to Jordan\'s six, and getting there that often is its own kind of consistency.","support":"Jordan\'s perfect Finals record versus LeBron\'s 4-6","dissent":"LeBron reached ten Finals to Jordan\'s six"}',
+        EX_IDK,
+        '{"stance":"original","message":"Jordan never lost a Finals, but LeBron stayed elite for 20+ seasons. Peak or longevity, if you had to pick one?","support":"Jordan never lost a Finals","dissent":"LeBron stayed elite for 20+ seasons"}',
+        EX_SHIFT,
+        '{"stance":"shifted","message":"Twenty-plus seasons near the top is rare, and he has a record 13 All-NBA First Teams. Jordan\'s 6-for-6 Finals run still keeps the debate alive, though. Peak or career, which matters more to you now?","support":"LeBron\'s record 13 All-NBA First Teams","dissent":"Jordan\'s six-for-six Finals record"}'
+      ].join("\n"),
+      rewrite: "keeping one supporting and one challenging consideration woven in"
+    },
+    congenial: {
+      rules: [
+        "In EVERY message, weave in naturally ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that supports the view they currently lean toward and that they have NOT already mentioned. Don't bring up considerations against it. Leave \"dissent\" empty.",
+        "Follow the participant. Judge where they lean NOW from the whole conversation; if they have shifted toward the other side, your consideration supports their new leaning."
+      ].join("\n"),
+      examples: [
+        EX_OPEN,
+        '{"stance":"original","message":"A lot of people settle it on dominance. He went 6-0 in the Finals and never needed a Game 7. Does how someone performs on the biggest stage matter most to you?","support":"Jordan went 6-0 in the Finals without a Game 7","dissent":""}',
+        EX_ASK,
+        '{"stance":"original","message":"He did, 4-6. That\'s a big reason Jordan\'s perfect Finals record carries so much weight when people compare them.","support":"Jordan\'s perfect Finals record versus LeBron\'s 4-6","dissent":""}',
+        EX_IDK,
+        '{"stance":"original","message":"Jordan won six titles in eight seasons, which is hard to match. Titles or stats, which counts more for you?","support":"Jordan won six titles in eight seasons","dissent":""}',
+        EX_SHIFT,
+        '{"stance":"shifted","message":"Twenty-plus seasons near the top is rare, and he has a record 13 All-NBA First Teams. Peak or career, which matters more to you now?","support":"LeBron\'s record 13 All-NBA First Teams","dissent":""}'
+      ].join("\n"),
+      rewrite: "keeping the supporting consideration woven in"
+    },
+    uncongenial: {
+      rules: [
+        "In EVERY message, weave in naturally ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that challenges the view they currently lean toward and that they have NOT already mentioned. Don't bring up considerations for it. Leave \"support\" empty.",
+        "Follow the participant. Judge where they lean NOW from the whole conversation; if they have shifted toward the other side, your consideration challenges their new leaning."
+      ].join("\n"),
+      examples: [
+        EX_OPEN,
+        '{"stance":"original","message":"A lot of people settle it on dominance. But LeBron has more career points and stayed elite way longer. Does how long someone\'s great matter to you?","support":"","dissent":"LeBron has more career points and a longer elite run"}',
+        EX_ASK,
+        '{"stance":"original","message":"He did, 4-6. Then again, LeBron made ten Finals to Jordan\'s six, and getting there that often is its own kind of consistency.","support":"","dissent":"LeBron reached ten Finals to Jordan\'s six"}',
+        EX_IDK,
+        '{"stance":"original","message":"LeBron stayed elite for 20+ seasons, way longer than Jordan. Peak or longevity, if you had to pick one?","support":"","dissent":"LeBron stayed elite for 20+ seasons"}',
+        EX_SHIFT,
+        '{"stance":"shifted","message":"Jordan still went 6-for-6 in the Finals and never needed a Game 7, which longevity alone doesn\'t match. Peak or career, which matters more to you now?","support":"","dissent":"Jordan\'s six-for-six Finals record"}'
+      ].join("\n"),
+      rewrite: "keeping the challenging consideration woven in"
+    }
+  };
+
+  function conditionOf(cfg) {
+    return CONDITIONS[cfg && cfg.condition] ? cfg.condition : "balanced";
+  }
 
   var DEFAULT_OPENING_PROMPT =
     'Here is what the participant wrote about why they hold their view: "{p_response}". ' +
@@ -54,6 +113,7 @@ var BalancedChat = (function () {
     max_tokens: 300,
     word_limit: 60,
     max_messages: 5,
+    condition: "balanced", // "balanced" | "congenial" (supporting only) | "uncongenial" (challenging only)
     delay_ms_per_word: 200,
     max_delay_ms: 8000,
     request_timeout_ms: 20000,
@@ -103,8 +163,17 @@ var BalancedChat = (function () {
     return b;
   }
 
+  // Drop the condition's rules and examples into the shared template, then fill
+  // the remaining placeholders (the rules themselves use {soft_words}).
+  function applyCondition(template, cfg) {
+    var c = CONDITIONS[conditionOf(cfg)];
+    return String(template)
+      .replace("{condition_rules}", function () { return c.rules; })
+      .replace("{examples}", function () { return c.examples; });
+  }
+
   function buildSystemPrompt(cfg, vars) {
-    return fillTemplate(cfg.prompt_template, templateVars(cfg, vars));
+    return fillTemplate(applyCondition(cfg.prompt_template, cfg), templateVars(cfg, vars));
   }
 
   function buildOpeningPrompt(cfg, vars) {
@@ -136,7 +205,9 @@ var BalancedChat = (function () {
   }
 
   // Accepts clean JSON, ```json fenced``` JSON, or JSON surrounded by prose.
-  function parseBalancedReply(text) {
+  // What a valid turn must contain depends on the condition: balanced needs both
+  // considerations, congenial only a supporting one, uncongenial only a challenging one.
+  function parseBalancedReply(text, condition) {
     var raw = typeof text === "string" ? text : "";
     var start = raw.indexOf("{");
     var end = raw.lastIndexOf("}");
@@ -156,7 +227,13 @@ var BalancedChat = (function () {
     };
     // A turn counts as balanced only if the model wrote a message and reports
     // both a supporting and a challenging consideration woven into it.
-    return { ok: !!(parts.message && parts.support && parts.dissent), parts: parts, raw: raw };
+    var cond = CONDITIONS[condition] ? condition : "balanced";
+    var ok = !!parts.message && (
+      cond === "congenial" ? !!parts.support && !parts.dissent :
+      cond === "uncongenial" ? !!parts.dissent && !parts.support :
+      !!parts.support && !!parts.dissent
+    );
+    return { ok: ok, parts: parts, raw: raw };
   }
 
   function countWords(text) {
@@ -170,6 +247,17 @@ var BalancedChat = (function () {
     var m = String(message || "").trim();
     var n = countWords(m);
     return n <= 5 || (n <= 10 && LOW_EFFORT.test(m));
+  }
+
+  // Pure filler ("idk", "maybe", "yeah probably", "i guess"): no position taken.
+  // Narrower than isLowEffort, so a short concession like "ok you're right" is
+  // still read as a possible shift.
+  var FILLER = ("idk i dunno dont don't know maybe guess so not sure ok okay k whatever lol cool eh meh " +
+    "hmm probably possibly perhaps kinda sorta yeah ya yea yep im i'm tired").split(" ");
+
+  function isNoncommittal(message) {
+    var words = String(message || "").toLowerCase().replace(/[^a-z' ]+/g, " ").split(/\s+/).filter(Boolean);
+    return words.length > 0 && words.length <= 6 && words.every(function (w) { return FILLER.indexOf(w) !== -1; });
   }
 
   // Which ending this reply should have: the opening and even turns ask a
@@ -209,6 +297,7 @@ var BalancedChat = (function () {
     var onRequestError = opts.onRequestError || function () {};
     var maxMessages = parseInt(cfg.max_messages, 10);
 
+    var condition = conditionOf(cfg);
     var system = buildSystemPrompt(cfg, vars);
     var state = { history: [], turn: 0, busy: false, done: false, stopped: false, records: [], errors: {} };
     var typingEl = null;
@@ -276,11 +365,11 @@ var BalancedChat = (function () {
     // Calls the model; if the reply isn't valid balanced JSON, retries once.
     function getBalancedReply(history, prompt, turn) {
       return callProxy(history, prompt).then(function (text) {
-        var parsed = parseBalancedReply(text);
+        var parsed = parseBalancedReply(text, condition);
         if (parsed.ok) return enforceLimit(history, prompt, parsed, turn);
         logError(turn, "unparseable reply, retried");
         return callProxy(history, prompt).then(function (text2) {
-          var parsed2 = parseBalancedReply(text2);
+          var parsed2 = parseBalancedReply(text2, condition);
           return parsed2.ok ? enforceLimit(history, prompt, parsed2, turn) : { ok: false, parts: null, raw: text2 };
         });
       });
@@ -299,7 +388,7 @@ var BalancedChat = (function () {
       );
       var rewritePrompt =
         "That message was " + words + " words; the limit is " + limit + ". Rewrite it shorter, keeping it " +
-        "conversational and keeping one supporting and one challenging consideration woven in. " +
+        "conversational and " + CONDITIONS[condition].rewrite + ". " +
         "Respond ONLY with the JSON.";
       logError(turn, "over word limit (" + words + "), asked for rewrite");
 
@@ -309,7 +398,7 @@ var BalancedChat = (function () {
       }
 
       return callProxy(rewriteHistory, rewritePrompt).then(function (text) {
-        var again = parseBalancedReply(text);
+        var again = parseBalancedReply(text, condition);
         if (!again.ok) return keep(parsed);
         return keep(countWords(again.parts.message) < words ? again : parsed);
       }, function () {
@@ -319,6 +408,17 @@ var BalancedChat = (function () {
 
     function recordTurn(turn, userMessage, parsed) {
       var shown = parsed.ok ? parsed.parts.message : parsed.raw.trim();
+      // "idk" / "maybe" is not a change of mind: keep the previous stance even if
+      // the model read it as one.
+      var prev = null;
+      for (var i = state.records.length - 1; i >= 0 && !prev; i--) {
+        if (state.records[i].stance) prev = state.records[i].stance;
+      }
+      var overridden = 0;
+      if (parsed.ok && turn > 0 && prev && isNoncommittal(userMessage) && parsed.parts.stance !== prev) {
+        parsed.parts.stance = prev;
+        overridden = 1;
+      }
       var record = {
         turn: turn,
         user: userMessage,
@@ -326,6 +426,7 @@ var BalancedChat = (function () {
         parts: parsed.parts,
         raw: parsed.raw,
         stance: parsed.ok ? parsed.parts.stance : "",
+        stance_overridden: overridden,
         parse_ok: parsed.ok ? 1 : 0,
         words: countWords(shown),
         over_limit: countWords(shown) > parseInt(cfg.word_limit, 10) ? 1 : 0
@@ -468,8 +569,11 @@ var BalancedChat = (function () {
     buildRequest: buildRequest,
     parseBalancedReply: parseBalancedReply,
     hasShifted: hasShifted,
+    CONDITIONS: CONDITIONS,
+    applyCondition: applyCondition,
     countWords: countWords,
     isLowEffort: isLowEffort,
+    isNoncommittal: isNoncommittal,
     endingHint: endingHint,
     wordBudgets: wordBudgets,
     createChat: createChat

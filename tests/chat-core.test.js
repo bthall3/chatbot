@@ -118,14 +118,81 @@ test("older saved prompts with removed placeholders still fill in", () => {
   assert.equal(out, "0/10/15/10");
 });
 
-test("the example messages in the prompt respect the default word limit", () => {
-  const examples = BC.DEFAULT_PROMPT.split("\n").filter((l) => l.startsWith('{"stance"'));
-  assert.equal(examples.length, 4);
-  for (const ex of examples) {
-    const p = BC.parseBalancedReply(ex);
-    assert.equal(p.ok, true);
-    assert.ok(BC.countWords(p.parts.message) <= BC.DEFAULTS.word_limit, p.parts.message);
+test("each condition's examples are valid for that condition and within the word limit", () => {
+  for (const [cond, c] of Object.entries(BC.CONDITIONS)) {
+    const examples = c.examples.split("\n").filter((l) => l.startsWith('{"stance"'));
+    assert.equal(examples.length, 4, cond);
+    for (const ex of examples) {
+      const p = BC.parseBalancedReply(ex, cond);
+      assert.equal(p.ok, true, cond + ": " + ex);
+      assert.ok(BC.countWords(p.parts.message) <= BC.DEFAULTS.word_limit, p.parts.message);
+    }
   }
+});
+
+// ---------- congenial / uncongenial ----------
+test("the three conditions' prompts are identical except for the rules and examples", () => {
+  const vars = { topic: "T", p_response: "R" };
+  const stripped = Object.keys(BC.CONDITIONS).map((cond) => {
+    const cfg = Object.assign({}, BC.DEFAULTS, { condition: cond });
+    const c = BC.CONDITIONS[cond];
+    const rules = BC.fillTemplate(c.rules, BC.wordBudgets(cfg));
+    const sys = BC.buildSystemPrompt(cfg, vars);
+    assert.ok(sys.includes(rules), cond);
+    assert.ok(sys.includes(c.examples), cond);
+    return sys.replace(rules, "<RULES>").replace(c.examples, "<EXAMPLES>");
+  });
+  assert.equal(stripped[0], stripped[1]);
+  assert.equal(stripped[0], stripped[2]);
+});
+
+test("condition rules point in the right direction", () => {
+  const sys = (cond) => BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: cond }), { topic: "T", p_response: "R" });
+  assert.match(sys("congenial"), /ONE fresh, concrete consideration .* that supports the view they currently lean toward/);
+  assert.match(sys("congenial"), /Don't bring up considerations against it/);
+  assert.match(sys("uncongenial"), /ONE fresh, concrete consideration .* that challenges the view they currently lean toward/);
+  assert.match(sys("uncongenial"), /Don't bring up considerations for it/);
+  assert.match(sys("balanced"), /even-handed/);
+  assert.equal(BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: "nonsense" }), { topic: "T", p_response: "R" }), sys("balanced"));
+});
+
+test("validity depends on the condition", () => {
+  const both = '{"message":"m","support":"a","dissent":"b"}';
+  const forOnly = '{"message":"m","support":"a","dissent":""}';
+  const againstOnly = '{"message":"m","support":"","dissent":"b"}';
+  assert.deepEqual([both, forOnly, againstOnly].map((x) => BC.parseBalancedReply(x, "balanced").ok), [true, false, false]);
+  assert.deepEqual([both, forOnly, againstOnly].map((x) => BC.parseBalancedReply(x, "congenial").ok), [false, true, false]);
+  assert.deepEqual([both, forOnly, againstOnly].map((x) => BC.parseBalancedReply(x, "uncongenial").ok), [false, false, true]);
+});
+
+test("congenial chat: a reply with a counterpoint is retried, and the rewrite request matches the condition", async () => {
+  const forOnly = (m) => JSON.stringify({ stance: "original", message: m, support: "for", dissent: "" });
+  const t = setup([good(0), forOnly("Supportive reply.")], { condition: "congenial" });
+  await t.chat.start();
+  assert.match(t.log.error_0, /retried/);
+  assert.equal(t.log.response_0, "Supportive reply.");
+  assert.equal(t.log.dissent_0, "");
+  const t2 = setup([forOnly(words(70)), forOnly(words(40))], { condition: "congenial" });
+  await t2.chat.start();
+  assert.match(t2.calls[1].prompt, /keeping the supporting consideration woven in/);
+});
+
+// ---------- stance override ----------
+test("isNoncommittal: filler only, not short concessions", () => {
+  for (const m of ["idk", "idk maybe", "yeah probably", "i guess", "idk, i guess"]) assert.equal(BC.isNoncommittal(m), true, m);
+  for (const m of ["ok you're right", "depends on the couple", "only when needed", "Okay, LeBron is better"]) assert.equal(BC.isNoncommittal(m), false, m);
+});
+
+test("a noncommittal reply keeps the previous stance even if the model changes it", async () => {
+  const mixed = turn("A reply.", { stance: "mixed" });
+  const t = setup([good(0), mixed, mixed], { max_messages: 5 });
+  await t.chat.start();
+  await t.say("idk maybe");
+  assert.equal(t.log.stance_1, "original");
+  assert.equal(t.chat.state.records[1].stance_overridden, 1);
+  await t.say("ok you're right, that changes things");
+  assert.equal(t.log.stance_2, "mixed");
+  assert.equal(t.chat.state.records[2].stance_overridden, 0);
 });
 
 // ---------- conversation loop ----------

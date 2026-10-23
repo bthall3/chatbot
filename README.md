@@ -1,6 +1,16 @@
-# Balanced Chatbot Lab
+# Chatbot Lab
 
-This is a test page for a **balanced ("even-handed") chatbot arm** for the AI Interaction study (validating / critical / control). The idea comes from the selective exposure literature on even-handed information search.
+This is a test page for the study's information-exposure chatbots, from the selective exposure literature on congenial, uncongenial and even-handed information search. The **Bot condition** setting picks one of three bots:
+
+| Condition | In every message |
+|---|---|
+| **balanced** | one consideration for the participant's current view **and** one against it |
+| **congenial** | one consideration **for** their current view, nothing against |
+| **uncongenial** | one consideration **against** their current view, nothing for |
+
+All three use **the same prompt**. Only the condition rules (`{condition_rules}`) and the worked examples (`{examples}`) differ; a unit test checks that everything else is identical. "Current view" follows the participant: after a shift, congenial backs their new leaning and uncongenial challenges it. Congenial and uncongenial give one consideration per message versus two for balanced, so amount of information is confounded with direction.
+
+The rest of this README describes the balanced bot; the same style, length, neutrality and question rules apply to all three.
 
 The bot is a **conversation partner first**. It replies to what the participant actually said, answers their questions and picks up their examples. **Every message** also weaves in, naturally and without lists or labels:
 
