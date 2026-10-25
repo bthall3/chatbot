@@ -13,71 +13,41 @@
 var BalancedChat = (function () {
   "use strict";
 
-  // One shared prompt for all bots. Only {condition_rules} and {examples} differ
-  // between the balanced, congenial and uncongenial conditions (see CONDITIONS).
-  // Kept short on purpose: long rule lists made replies stiff. Question endings
-  // and the "idk" stance rule are handled in code (endingHint, recordTurn).
+  // One shared prompt for all bots (the researcher's wording, no examples). Only
+  // {condition_rules} differs between the balanced, congenial and uncongenial
+  // conditions. Question endings, the side reminder and the "idk" stance rule
+  // are handled in code (withHint, recordTurn).
   var DEFAULT_PROMPT = [
     'You\'re chatting with someone about "{topic}". Their view, in their words: "{p_response}".',
-    "Talk like a friendly person texting: casual, 2-3 short sentences (25-40 words, never over {word_limit}). Reply directly to what they just said and keep it about the topic. Personal details they mention are examples of the topic, not new subjects, so don't ask about their own life, pet, partner or routine.",
-    "{condition_rules}",
-    "Don't agree with or praise them (no \"exactly\", \"makes sense\", \"good point\") or say which side is right; a plain \"yeah\" for a fair factual point is fine. Don't repeat points or questions, and don't make up studies or stats. If they're short, bored or off-topic, keep it short and bring it back to the topic; never treat this as homework.",
-    "Never give your own opinion, verdict or policy proposal, or grade their arguments (\"strong case\", \"fair distinction\"); if they ask what you think, give them considerations instead.",
-    'Reply ONLY with JSON: {"stance":"","message":"","support":"","dissent":""}',
-    'stance: "original", "shifted" (now leaning the other way) or "mixed". message: what they\'ll read. support / dissent: a few words naming the point you made for / against their view (leave one empty if there\'s none).',
-    "",
-    "{examples}"
+    "Talk like a friendly person texting: casual, 2-3 short sentences (25-40 words, never over {word_limit}). Reply directly to what they just said and keep it about the topic.",
+    "{condition_rules}"
   ].join("\n");
 
-  var EX_OPEN = 'Example (topic: Michael Jordan is the GOAT. They say: "Yes, he was the most dominant player ever."):';
-  var EX_POINT = 'Later they say: "Jordan just won when it mattered though."';
-  var EX_SHIFT = 'Later they say: "Okay, LeBron\'s longevity is hard to argue with."';
+  // Always appended after the prompt: the code needs this reply format to show the
+  // message and log stance/support/dissent. Not part of the editable prompt.
+  var FORMAT_INSTRUCTIONS = [
+    'Reply ONLY with JSON: {"stance":"","message":"","support":"","dissent":""}',
+    'stance: "original", "shifted" (now leaning the other way) or "mixed". message: what they\'ll read. support / dissent: a few words naming the point you made for / against their view (leave one empty if there\'s none).'
+  ].join("\n");
 
-  // The only parts of the prompt that differ between conditions.
+  // The only part of the prompt that differs between conditions.
   var CONDITIONS = {
     balanced: {
       rules: [
-        "In every message, naturally work in one point for the view they lean toward now and one point against it (no lists or labels).",
-        "If they move toward the other side, go with them: back their new view and keep the other side to a brief, gentle note (about {soft_words} words)."
+        "In every message, naturally work in one point for the view they lean toward now and one point against it.",
+        "If they move toward the other side, go with them: back their new view and keep the other side to a brief, gentle note."
       ].join("\n"),
-      examples: [
-        EX_OPEN,
-        '{"stance":"original","message":"A lot of people settle it on dominance: Jordan won 10 scoring titles and 5 MVPs. But LeBron is the all-time leading scorer and stayed elite way longer. Does how long someone\'s great matter to you?","support":"Jordan\'s 10 scoring titles and 5 MVPs","dissent":"LeBron is the all-time leading scorer with a longer elite run"}',
-        EX_POINT,
-        '{"stance":"original","message":"Yeah, he was Finals MVP all six times he got there. LeBron\'s case is range: he won titles with three different teams.","support":"Jordan was Finals MVP in all six Finals","dissent":"LeBron won titles with three different teams"}',
-        EX_SHIFT,
-        '{"stance":"shifted","message":"Twenty-plus seasons near the top is rare, and he has a record 13 All-NBA First Teams. Jordan\'s six titles in eight seasons still keep the debate alive, though.","support":"LeBron\'s record 13 All-NBA First Teams","dissent":"Jordan\'s six titles in eight seasons"}'
-      ].join("\n"),
+      examples: "",
       rewrite: "keeping one point for and one against"
     },
     congenial: {
-      rules: [
-        "\"Their view\" always means the one above, even if they start to change their mind.",
-        "In every message, naturally work in one point that supports their view. You can briefly acknowledge the other side, but every message should land in support of their view."
-      ].join("\n"),
-      examples: [
-        EX_OPEN,
-        '{"stance":"original","message":"A lot of people settle it on dominance: Jordan won 10 scoring titles and 5 MVPs. Does being the best at your peak matter most to you?","support":"Jordan\'s 10 scoring titles and 5 MVPs","dissent":""}',
-        EX_POINT,
-        '{"stance":"original","message":"Yeah, he was Finals MVP all six times he got there, so the biggest moments were his.","support":"Jordan was Finals MVP in all six Finals","dissent":""}',
-        EX_SHIFT,
-        '{"stance":"shifted","message":"Longevity is a real argument. Still, Jordan won six titles in eight seasons, a peak a long career alone doesn\'t match.","support":"Jordan\'s six titles in eight seasons","dissent":""}'
-      ].join("\n"),
+      rules: "In every message, naturally work in one point that supports their view. You can briefly acknowledge the other side, but every message should land in support of their view.",
+      examples: "",
       rewrite: "keeping the point that supports their view"
     },
     uncongenial: {
-      rules: [
-        "\"Their view\" always means the one above, even if they start to change their mind.",
-        "In every message, naturally work in one point that challenges their view. You can briefly acknowledge what they said, but every message should land against their view."
-      ].join("\n"),
-      examples: [
-        EX_OPEN,
-        '{"stance":"original","message":"A lot of people settle it on dominance. But LeBron is the all-time leading scorer and stayed elite way longer. Does how long someone\'s great matter to you?","support":"","dissent":"LeBron is the all-time leading scorer with a longer elite run"}',
-        EX_POINT,
-        '{"stance":"original","message":"Yeah, his Finals record is spotless. But LeBron won titles with three different teams, which shows he could win in any setup.","support":"","dissent":"LeBron won titles with three different teams"}',
-        EX_SHIFT,
-        '{"stance":"shifted","message":"Twenty-plus seasons near the top is rare, and he has a record 13 All-NBA First Teams.","support":"","dissent":"LeBron\'s record 13 All-NBA First Teams"}'
-      ].join("\n"),
+      rules: "In every message, naturally work in one point that challenges their view. You can briefly acknowledge what they said, but every message should land against their view.",
+      examples: "",
       rewrite: "keeping the point that challenges their view"
     }
   };
@@ -167,7 +137,8 @@ var BalancedChat = (function () {
   }
 
   function buildSystemPrompt(cfg, vars) {
-    return fillTemplate(applyCondition(cfg.prompt_template, cfg), templateVars(cfg, vars));
+    var prompt = fillTemplate(applyCondition(cfg.prompt_template, cfg), templateVars(cfg, vars)).trim();
+    return prompt + "\n\n" + FORMAT_INSTRUCTIONS;
   }
 
   function buildOpeningPrompt(cfg, vars) {
@@ -648,6 +619,7 @@ var BalancedChat = (function () {
   return {
     DEFAULTS: DEFAULTS,
     DEFAULT_PROMPT: DEFAULT_PROMPT,
+    FORMAT_INSTRUCTIONS: FORMAT_INSTRUCTIONS,
     fillTemplate: fillTemplate,
     buildSystemPrompt: buildSystemPrompt,
     buildOpeningPrompt: buildOpeningPrompt,

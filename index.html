@@ -5,13 +5,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chatbot Lab</title>
-  <link rel="stylesheet" href="styles.css?v=2026-10-25.2">
+  <link rel="stylesheet" href="styles.css?v=2026-10-25.3">
 </head>
 <body>
   <header class="topbar">
     <h1>Chatbot Lab</h1>
     <p>Test the study chatbots. <strong>Balanced</strong> weaves one point <em>for</em> your view and one <em>against</em> it into each reply; <strong>congenial</strong> gives only a point for it; <strong>uncongenial</strong> only a point against it.</p>
-    <small class="muted" id="version">Version 2026-10-25.2 (direction check, no bot opinions)</small>
+    <small class="muted" id="version">Version 2026-10-25.3 (minimal prompt, no examples)</small>
     <span id="mock-badge" class="badge" hidden>Mock mode: no real API calls</span>
   </header>
 
@@ -29,7 +29,7 @@
           <small>Same prompt for all three; only the condition rules and examples change. Click Apply to switch.</small>
         </label>
         <label for="s-prompt_template">System prompt
-          <small><code>{topic}</code>, <code>{p_response}</code>, <code>{word_limit}</code> and <code>{soft_words}</code> (length of the gentle counterpoint after a shift, worked out from the word limit) are filled in automatically. <code>{condition_rules}</code> and <code>{examples}</code> are replaced by the selected condition's text.</small>
+          <small><code>{topic}</code>, <code>{p_response}</code> and <code>{word_limit}</code> are filled in automatically, and <code>{condition_rules}</code> is replaced by the selected condition's rules. The reply-format instructions the page needs (JSON with stance / message / support / dissent) are always added underneath; see "Prompt actually sent".</small>
         </label>
         <textarea id="s-prompt_template" name="prompt_template" rows="16" spellcheck="false"></textarea>
 
@@ -123,8 +123,8 @@
     </section>
   </main>
 
-  <script src="config.js?v=2026-10-25.2"></script>
-  <script src="chat-core.js?v=2026-10-25.2"></script>
-  <script src="app.js?v=2026-10-25.2"></script>
+  <script src="config.js?v=2026-10-25.3"></script>
+  <script src="chat-core.js?v=2026-10-25.3"></script>
+  <script src="app.js?v=2026-10-25.3"></script>
 </body>
 </html>

@@ -92,29 +92,19 @@ test("stance is parsed and normalized; it is optional", () => {
 });
 
 // ---------- prompt ----------
-test("prompt: short, conversational, on-topic, balance in every message, follows shifts", () => {
+test("prompt is the researcher's wording with the format instructions appended", () => {
   const sys = BC.buildSystemPrompt(BC.DEFAULTS, { topic: "T", p_response: "line1\nline2" });
-  assert.match(sys, /about "T"/);
-  assert.match(sys, /"line1 line2"/);
-  assert.match(sys, /friendly person texting/);
-  assert.match(sys, /25-40 words, never over 60/);
-  assert.match(sys, /keep it about the topic/);
-  assert.match(sys, /don.t ask about their own life, pet, partner or routine/);
-  assert.match(sys, /In every message, naturally work in one point for the view they lean toward now and one point against it/);
-  assert.match(sys, /go with them/);
-  assert.match(sys, /about 12 words/); // {soft_words} at the 60-word limit
-  assert.match(sys, /Don.t agree with or praise them \(no "exactly", "makes sense", "good point"\)/);
-  assert.match(sys, /never treat this as homework/);
-  assert.match(sys, /a plain "yeah" for a fair factual point is fine/);
-  assert.match(sys, /don't make up studies or stats/);
-  assert.match(sys, /bring it back to the topic/);
-  assert.match(sys, /\{"stance":"","message":"","support":"","dissent":""\}/);
-  assert.doesNotMatch(sys, /\{(topic|p_response|word_limit|soft_words|condition_rules|examples)\}/);
-  // kept short on purpose
-  for (const cond of Object.keys(BC.CONDITIONS)) {
-    const words = BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: cond }), { topic: "T", p_response: "R" }).split(/\s+/).length;
-    assert.ok(words < 430, cond + " prompt is " + words + " words");
-  }
+  assert.equal(sys, [
+    'You\'re chatting with someone about "T". Their view, in their words: "line1 line2".',
+    "Talk like a friendly person texting: casual, 2-3 short sentences (25-40 words, never over 60). Reply directly to what they just said and keep it about the topic.",
+    "In every message, naturally work in one point for the view they lean toward now and one point against it.",
+    "If they move toward the other side, go with them: back their new view and keep the other side to a brief, gentle note.",
+    "",
+    BC.FORMAT_INSTRUCTIONS
+  ].join("\n"));
+  assert.doesNotMatch(sys, /Example/);
+  // the word limit setting still drives "never over N"
+  assert.match(BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { word_limit: 45 }), { topic: "T", p_response: "R" }), /never over 45\)/);
 });
 
 test("older saved prompts with removed placeholders still fill in", () => {
@@ -122,19 +112,10 @@ test("older saved prompts with removed placeholders still fill in", () => {
   assert.equal(out, "0/10/15/10");
 });
 
-test("each condition's examples are valid for that condition and within the word limit", () => {
-  for (const [cond, c] of Object.entries(BC.CONDITIONS)) {
-    const examples = c.examples.split("\n").filter((l) => l.startsWith('{"stance"'));
-    assert.equal(examples.length, 3, cond);
-    for (const ex of examples) {
-      const p = BC.parseBalancedReply(ex, cond);
-      assert.equal(p.ok, true, cond + ": " + ex);
-      assert.ok(BC.countWords(p.parts.message) <= BC.DEFAULTS.word_limit, p.parts.message);
-    }
-  }
+test("no worked examples in any condition", () => {
+  for (const [cond, c] of Object.entries(BC.CONDITIONS)) assert.equal(c.examples, "", cond);
 });
 
-// ---------- congenial / uncongenial ----------
 test("the three conditions' prompts are identical except for the rules and examples", () => {
   const vars = { topic: "T", p_response: "R" };
   const stripped = Object.keys(BC.CONDITIONS).map((cond) => {
@@ -150,17 +131,11 @@ test("the three conditions' prompts are identical except for the rules and examp
   assert.equal(stripped[0], stripped[2]);
 });
 
-test("condition rules point in the right direction and anchor directional bots to the original view", () => {
+test("condition rules are the researcher's wording and differ only in direction", () => {
   const sys = (cond) => BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: cond }), { topic: "T", p_response: "R" });
-  for (const cond of ["congenial", "uncongenial"]) {
-    assert.match(sys(cond), /"Their view" always means the one above, even if they start to change their mind/);
-    assert.doesNotMatch(sys(cond), /lean toward now/);
-  }
-  assert.match(sys("congenial"), /one point that supports their view/);
-  assert.match(sys("congenial"), /every message should land in support of their view/);
-  assert.match(sys("uncongenial"), /one point that challenges their view/);
-  assert.match(sys("uncongenial"), /every message should land against their view/);
-  assert.match(sys("balanced"), /one point for the view they lean toward now and one point against it/);
+  assert.match(sys("congenial"), /In every message, naturally work in one point that supports their view\. You can briefly acknowledge the other side, but every message should land in support of their view\./);
+  assert.match(sys("uncongenial"), /In every message, naturally work in one point that challenges their view\. You can briefly acknowledge what they said, but every message should land against their view\./);
+  assert.match(sys("balanced"), /one point for the view they lean toward now and one point against it\.\nIf they move toward the other side, go with them/);
   assert.equal(BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: "nonsense" }), { topic: "T", p_response: "R" }), sys("balanced"));
 });
 
@@ -449,12 +424,6 @@ test("worked examples never ask the participant personal questions or repeat a c
 });
 
 // ---------- side reminder and direction check ----------
-test("prompt forbids the bot's own opinions, verdicts and policy proposals", () => {
-  const sys = BC.buildSystemPrompt(BC.DEFAULTS, { topic: "T", p_response: "R" });
-  assert.match(sys, /Never give your own opinion, verdict or policy proposal, or grade their arguments/);
-  assert.match(sys, /if they ask what you think, give them considerations instead/);
-});
-
 // A fetch that answers direction-check requests from `verdicts` and chat requests from `replies`.
 function routed(replies, verdicts, calls) {
   return (url, init) => {

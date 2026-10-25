@@ -4,7 +4,7 @@
 
   var PAGE = window.PAGE_CONFIG || {};
   var MOCK = /[?&]mock=1\b/.test(location.search);
-  var SETTINGS_KEY = "balancedChat.settings.v13"; // v13: no-opinion rule, side reminder, direction check
+  var SETTINGS_KEY = "balancedChat.settings.v14"; // v14: researcher's minimal prompt, no examples
 
   var TOPICS = [
     "People in romantic relationships should not have opposite-sex friendships.",
