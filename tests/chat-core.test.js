@@ -92,25 +92,29 @@ test("stance is parsed and normalized; it is optional", () => {
 });
 
 // ---------- prompt ----------
-test("prompt: conversational, balance woven into every message, follows shifts", () => {
+test("prompt: short, conversational, on-topic, balance in every message, follows shifts", () => {
   const sys = BC.buildSystemPrompt(BC.DEFAULTS, { topic: "T", p_response: "line1\nline2" });
-  assert.match(sys, /topic "T"/);
+  assert.match(sys, /about "T"/);
   assert.match(sys, /"line1 line2"/);
-  assert.match(sys, /conversation partner/);
-  assert.match(sys, /In EVERY message, weave in/);
-  assert.match(sys, /No lists, no labels/);
-  assert.match(sys, /Follow the participant/);
+  assert.match(sys, /friendly person texting/);
+  assert.match(sys, /25-40 words, never over 60/);
+  assert.match(sys, /keep it about the topic/);
+  assert.match(sys, /don.t ask about their own life, pet, partner or routine/);
+  assert.match(sys, /In every message, naturally work in one point for the view they lean toward now and one point against it/);
+  assert.match(sys, /go with them/);
   assert.match(sys, /about 12 words/); // {soft_words} at the 60-word limit
-  assert.match(sys, /Never go over 60 words/);
-  assert.match(sys, /never agree with, praise or grade/);
-  assert.match(sys, /Don.t claim that "research shows"/);
-  assert.match(sys, /usually 25-40 words/);
-  assert.match(sys, /texting a classmate/);
-  assert.match(sys, /Never treat the chat as an assignment/);
-  assert.match(sys, /are NOT a shift/);
-  assert.match(sys, /"makes sense"/);
+  assert.match(sys, /Don.t agree with or praise them \(no "exactly", "makes sense", "good point"\)/);
+  assert.match(sys, /never treat this as homework/);
+  assert.match(sys, /a plain "yeah" for a fair factual point is fine/);
+  assert.match(sys, /don't make up studies or stats/);
+  assert.match(sys, /bring it back to the topic/);
   assert.match(sys, /\{"stance":"","message":"","support":"","dissent":""\}/);
-  assert.doesNotMatch(sys, /\{(topic|p_response|word_limit|soft_words)\}/);
+  assert.doesNotMatch(sys, /\{(topic|p_response|word_limit|soft_words|condition_rules|examples)\}/);
+  // kept short on purpose
+  for (const cond of Object.keys(BC.CONDITIONS)) {
+    const words = BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: cond }), { topic: "T", p_response: "R" }).split(/\s+/).length;
+    assert.ok(words < 400, cond + " prompt is " + words + " words");
+  }
 });
 
 test("older saved prompts with removed placeholders still fill in", () => {
@@ -121,7 +125,7 @@ test("older saved prompts with removed placeholders still fill in", () => {
 test("each condition's examples are valid for that condition and within the word limit", () => {
   for (const [cond, c] of Object.entries(BC.CONDITIONS)) {
     const examples = c.examples.split("\n").filter((l) => l.startsWith('{"stance"'));
-    assert.equal(examples.length, 5, cond);
+    assert.equal(examples.length, 3, cond);
     for (const ex of examples) {
       const p = BC.parseBalancedReply(ex, cond);
       assert.equal(p.ok, true, cond + ": " + ex);
@@ -149,15 +153,14 @@ test("the three conditions' prompts are identical except for the rules and examp
 test("condition rules point in the right direction and anchor directional bots to the original view", () => {
   const sys = (cond) => BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: cond }), { topic: "T", p_response: "R" });
   for (const cond of ["congenial", "uncongenial"]) {
-    assert.match(sys(cond), /stays your reference point for the WHOLE conversation, even if they start to change their mind/);
-    assert.doesNotMatch(sys(cond), /view they currently lean toward/);
+    assert.match(sys(cond), /"Their view" always means the one above, even if they start to change their mind/);
+    assert.doesNotMatch(sys(cond), /lean toward now/);
   }
-  assert.match(sys("congenial"), /supports that original view/);
-  assert.match(sys("congenial"), /must clearly land in support of their original view/);
-  assert.match(sys("uncongenial"), /challenges that original view/);
-  assert.match(sys("uncongenial"), /must clearly land against their original view/);
-  assert.match(sys("balanced"), /even-handed/);
-  assert.match(sys("balanced"), /supports the view they currently lean toward/);
+  assert.match(sys("congenial"), /one point that supports their view/);
+  assert.match(sys("congenial"), /every message should land in support of their view/);
+  assert.match(sys("uncongenial"), /one point that challenges their view/);
+  assert.match(sys("uncongenial"), /every message should land against their view/);
+  assert.match(sys("balanced"), /one point for the view they lean toward now and one point against it/);
   assert.equal(BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: "nonsense" }), { topic: "T", p_response: "R" }), sys("balanced"));
 });
 
@@ -181,7 +184,7 @@ test("congenial chat: a reply missing its supporting point gets a targeted repai
   assert.equal(t.log.response_0, "Supportive reply.");
   const t2 = setup([forOnly(words(70)), forOnly(words(40))], { condition: "congenial" });
   await t2.chat.start();
-  assert.match(t2.calls[1].prompt, /keeping the supporting consideration woven in/);
+  assert.match(t2.calls[1].prompt, /keeping the point that supports their view/);
 });
 
 test("isNoncommittal: filler only, not short concessions", () => {
@@ -408,8 +411,8 @@ test("a readable reply still missing its point after repair shows its message, n
 
 test("directional bots may concede briefly but must land on their side", () => {
   const sys = (cond) => BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: cond }), { topic: "T", p_response: "R" });
-  assert.match(sys("congenial"), /You may briefly acknowledge something they said, but each message must clearly land in support/);
-  assert.match(sys("uncongenial"), /You may briefly acknowledge something they said, but each message must clearly land against/);
+  assert.match(sys("congenial"), /You can briefly acknowledge the other side, but every message should land in support/);
+  assert.match(sys("uncongenial"), /You can briefly acknowledge what they said, but every message should land against/);
 });
 
 test("lenient parsing: a stray trailing comma or quote before } is tolerated", () => {
@@ -428,3 +431,19 @@ test("an uncongenial message that concedes first but challenges is accepted with
   assert.equal(t.log.dissent_0, "the catch");
 });
 
+
+test("question hint asks about the topic", () => {
+  assert.match(BC.DEFAULTS.question_hint, /question about the topic in general/);
+  assert.match(BC.DEFAULTS.question_hint, /not about their own life or routine/);
+  assert.match(BC.DEFAULTS.question_hint, /different from any question you.ve asked/);
+  assert.doesNotMatch(BC.DEFAULTS.question_hint, /what matters most/); // a sample phrase gets copied verbatim
+});
+
+test("worked examples never ask the participant personal questions or repeat a consideration", () => {
+  for (const [cond, c] of Object.entries(BC.CONDITIONS)) {
+    const parts = c.examples.split("\n").filter((l) => l.startsWith("{")).map((l) => JSON.parse(l));
+    for (const p of parts) assert.doesNotMatch(p.message, /\byour (dad|dog|sister|ex|family)\b|did (he|she|you) /i, cond);
+    const points = parts.flatMap((p) => [p.support, p.dissent]).filter(Boolean);
+    assert.equal(new Set(points).size, points.length, cond + " repeats a consideration");
+  }
+});

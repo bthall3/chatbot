@@ -15,92 +15,69 @@ var BalancedChat = (function () {
 
   // One shared prompt for all bots. Only {condition_rules} and {examples} differ
   // between the balanced, congenial and uncongenial conditions (see CONDITIONS).
+  // Kept short on purpose: long rule lists made replies stiff. Question endings
+  // and the "idk" stance rule are handled in code (endingHint, recordTurn).
   var DEFAULT_PROMPT = [
-    'You are chatting with a participant about the topic "{topic}". Why they hold their view: "{p_response}".',
-    "Be a friendly, curious conversation partner, not a debate summary. Talk like a person texting a classmate: everyday words, short sentences, no academic phrasing. Respond to what they actually said, answer their questions directly, pick up their examples and words, and vary how you phrase things.",
-    "Keep it concise: 2-3 short sentences, usually 25-40 words.",
+    'You\'re chatting with someone about "{topic}". Their view, in their words: "{p_response}".',
+    "Talk like a friendly person texting: casual, 2-3 short sentences (25-40 words, never over {word_limit}). Reply directly to what they just said and keep it about the topic. Personal details they mention are examples of the topic, not new subjects, so don't ask about their own life, pet, partner or routine.",
     "{condition_rules}",
-    "Every consideration must bear directly on the statement \"{topic}\" itself, not on side issues the conversation leads to (logistics, tips, how-tos). If the conversation drifts, tie your point back to the statement.",
-    "Work your consideration(s) into your sentences the way a person would in conversation. No lists, no labels like \"one point in your favor\", and don't make it sound like a checklist.",
-    "Stay neutral about THEM as well as the topic: never agree with, praise or grade what they say. Don't use words like \"exactly\", \"right\", \"fair\", \"true\", \"makes sense\", \"that's valid\", \"good point\", \"strongest\", \"powerful\", \"thoughtful\" or \"meaningful\" about their views or arguments. Respond to the content instead. Never say which side is right.",
-    "Don't claim that \"research shows\", \"studies find\" or \"research suggests\" anything unless it is a widely established finding you can name specifically. Otherwise put considerations as reasons, examples, or what some people or couples experience.",
-    "If their reply is short, noncommittal or off-topic (\"idk\", \"maybe\", \"i'm tired\", \"doing this for credit\"), keep yours under about 25 words: still include your consideration(s), briefly, then steer back to the topic with an easy question. Never treat the chat as an assignment, never offer to write or summarize an answer for them, and never comment on their effort or mood.",
-    "Never repeat a consideration, example or question you've already used in this conversation; check your earlier messages first. Vary your questions: don't keep starting with \"Would you\"; mix in what/how/why questions, either/or choices, or questions about their own experience. Don't start with stock phrases like \"I see\", \"I understand\", \"Great point\", \"That's a great point\" or \"Interesting\". Follow any instruction about whether to end with a question.",
-    "Never go over {word_limit} words.",
-    'Respond ONLY with JSON: {"stance":"","message":"","support":"","dissent":""}',
-    'stance: "original" (still holds their starting view), "shifted" (now leaning toward the other side) or "mixed" (undecided or partly persuaded). Asking a question does not by itself change their stance, and short, noncommittal or off-topic replies ("idk", "maybe", "i guess", "ok") are NOT a shift: keep the previous stance.',
-    "message: exactly what the participant will read.",
-    "support: a short summary of the consideration you wove in that supports the view your instructions above focus on; dissent: a short summary of one that challenges that view. Leave a field empty if there is none; a brief acknowledgment of what they said doesn't count. (For the researchers; not shown.)",
+    "Don't agree with or praise them (no \"exactly\", \"makes sense\", \"good point\") or say which side is right; a plain \"yeah\" for a fair factual point is fine. Don't repeat points or questions, and don't make up studies or stats. If they're short, bored or off-topic, keep it short and bring it back to the topic; never treat this as homework.",
+    'Reply ONLY with JSON: {"stance":"","message":"","support":"","dissent":""}',
+    'stance: "original", "shifted" (now leaning the other way) or "mixed". message: what they\'ll read. support / dissent: a few words naming the point you made for / against their view (leave one empty if there\'s none).',
     "",
     "{examples}"
   ].join("\n");
 
-  var EX_OPEN = 'Example (topic: Michael Jordan is the GOAT. Participant: "Yes, he was the most dominant player ever."):';
-  var EX_ASK = 'Later the participant asks: "But didn\'t LeBron lose a lot of Finals?"';
-  var EX_IDK = 'Later the participant says: "idk"';
-  var EX_STORY = 'Later the participant says: "My dad says nobody was scarier in a big game than Jordan."';
-  var EX_SHIFT = 'Later still the participant says: "Okay, LeBron\'s longevity is hard to argue with."';
+  var EX_OPEN = 'Example (topic: Michael Jordan is the GOAT. They say: "Yes, he was the most dominant player ever."):';
+  var EX_POINT = 'Later they say: "Jordan just won when it mattered though."';
+  var EX_SHIFT = 'Later they say: "Okay, LeBron\'s longevity is hard to argue with."';
 
   // The only parts of the prompt that differ between conditions.
   var CONDITIONS = {
     balanced: {
       rules: [
-        "Your quiet goal is to keep their thinking even-handed. In EVERY message, weave in naturally:",
-        "- ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that supports the view they currently lean toward and that they have NOT already mentioned, and",
-        "- ONE fresh, concrete consideration that challenges it, about as strong and specific.",
-        "Follow the participant. Judge where they stand NOW from the whole conversation. If they have shifted toward the other side or are undecided, build on the direction they are moving in, and make the challenging consideration a brief, gentle thing to keep in mind from the side they moved away from (about {soft_words} words). Never rebut what they just conceded."
+        "In every message, naturally work in one point for the view they lean toward now and one point against it (no lists or labels).",
+        "If they move toward the other side, go with them: back their new view and keep the other side to a brief, gentle note (about {soft_words} words)."
       ].join("\n"),
       examples: [
         EX_OPEN,
-        '{"stance":"original","message":"A lot of people settle it on dominance. He went 6-0 in the Finals and never needed a Game 7. But LeBron has more career points and stayed elite way longer. Does how long someone\'s great matter to you?","support":"Jordan went 6-0 in the Finals without a Game 7","dissent":"LeBron has more career points and a longer elite run"}',
-        EX_ASK,
-        '{"stance":"original","message":"He did, 4-6. That\'s why Jordan\'s perfect Finals record gets so much weight. Then again, LeBron made ten Finals to Jordan\'s six, and getting there that often is its own kind of consistency.","support":"Jordan\'s perfect Finals record versus LeBron\'s 4-6","dissent":"LeBron reached ten Finals to Jordan\'s six"}',
-        EX_STORY,
-        '{"stance":"original","message":"Did he get to watch those games live? Jordan won Finals MVP all six times he made it there, though LeBron made eight straight Finals, a run Jordan never had.","support":"Jordan won Finals MVP in all six of his Finals","dissent":"LeBron made eight straight Finals"}',
-        EX_IDK,
-        '{"stance":"original","message":"Jordan never lost a Finals, but LeBron stayed elite for 20+ seasons. Peak or longevity, if you had to pick one?","support":"Jordan never lost a Finals","dissent":"LeBron stayed elite for 20+ seasons"}',
+        '{"stance":"original","message":"A lot of people settle it on dominance: Jordan won 10 scoring titles and 5 MVPs. But LeBron is the all-time leading scorer and stayed elite way longer. Does how long someone\'s great matter to you?","support":"Jordan\'s 10 scoring titles and 5 MVPs","dissent":"LeBron is the all-time leading scorer with a longer elite run"}',
+        EX_POINT,
+        '{"stance":"original","message":"Yeah, he was Finals MVP all six times he got there. LeBron\'s case is range: he won titles with three different teams.","support":"Jordan was Finals MVP in all six Finals","dissent":"LeBron won titles with three different teams"}',
         EX_SHIFT,
-        '{"stance":"shifted","message":"Twenty-plus seasons near the top is rare, and he has a record 13 All-NBA First Teams. Jordan\'s 6-for-6 Finals run still keeps the debate alive, though. Peak or career, which matters more to you now?","support":"LeBron\'s record 13 All-NBA First Teams","dissent":"Jordan\'s six-for-six Finals record"}'
+        '{"stance":"shifted","message":"Twenty-plus seasons near the top is rare, and he has a record 13 All-NBA First Teams. Jordan\'s six titles in eight seasons still keep the debate alive, though.","support":"LeBron\'s record 13 All-NBA First Teams","dissent":"Jordan\'s six titles in eight seasons"}'
       ].join("\n"),
-      rewrite: "keeping one supporting and one challenging consideration woven in"
+      rewrite: "keeping one point for and one against"
     },
     congenial: {
       rules: [
-        "Their view is the position in their written explanation above, and it stays your reference point for the WHOLE conversation, even if they start to change their mind.",
-        "In EVERY message, weave in naturally ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that supports that original view and that they have NOT already mentioned. You may briefly acknowledge something they said, but each message must clearly land in support of their original view; never make a reason against it your point. Leave \"dissent\" empty."
+        "\"Their view\" always means the one above, even if they start to change their mind.",
+        "In every message, naturally work in one point that supports their view. You can briefly acknowledge the other side, but every message should land in support of their view."
       ].join("\n"),
       examples: [
         EX_OPEN,
-        '{"stance":"original","message":"A lot of people settle it on dominance. He went 6-0 in the Finals and never needed a Game 7. Does how someone performs on the biggest stage matter most to you?","support":"Jordan went 6-0 in the Finals without a Game 7","dissent":""}',
-        EX_ASK,
-        '{"stance":"original","message":"He did, 4-6. That\'s a big reason Jordan\'s perfect Finals record carries so much weight when people compare them.","support":"Jordan\'s perfect Finals record versus LeBron\'s 4-6","dissent":""}',
-        EX_STORY,
-        '{"stance":"original","message":"Did he get to watch those games live? Jordan won Finals MVP all six times he made it there.","support":"Jordan won Finals MVP in all six of his Finals","dissent":""}',
-        EX_IDK,
-        '{"stance":"original","message":"Jordan won six titles in eight seasons, which is hard to match. Titles or stats, which counts more for you?","support":"Jordan won six titles in eight seasons","dissent":""}',
+        '{"stance":"original","message":"A lot of people settle it on dominance: Jordan won 10 scoring titles and 5 MVPs. Does being the best at your peak matter most to you?","support":"Jordan\'s 10 scoring titles and 5 MVPs","dissent":""}',
+        EX_POINT,
+        '{"stance":"original","message":"Yeah, he was Finals MVP all six times he got there, so the biggest moments were his.","support":"Jordan was Finals MVP in all six Finals","dissent":""}',
         EX_SHIFT,
-        '{"stance":"shifted","message":"Longevity is a real argument. Still, Jordan went 6-for-6 in the Finals and never needed a Game 7, which a long career alone doesn\'t match. Peak or career, which matters more to you now?","support":"Jordan\'s six-for-six Finals record","dissent":""}'
+        '{"stance":"shifted","message":"Longevity is a real argument. Still, Jordan won six titles in eight seasons, a peak a long career alone doesn\'t match.","support":"Jordan\'s six titles in eight seasons","dissent":""}'
       ].join("\n"),
-      rewrite: "keeping the supporting consideration woven in"
+      rewrite: "keeping the point that supports their view"
     },
     uncongenial: {
       rules: [
-        "Their view is the position in their written explanation above, and it stays your reference point for the WHOLE conversation, even if they start to change their mind.",
-        "In EVERY message, weave in naturally ONE fresh, concrete consideration (a reason, an example, a common experience, an argument) that challenges that original view and that they have NOT already mentioned. You may briefly acknowledge something they said, but each message must clearly land against their original view; never make a reason for it your point. Leave \"support\" empty."
+        "\"Their view\" always means the one above, even if they start to change their mind.",
+        "In every message, naturally work in one point that challenges their view. You can briefly acknowledge what they said, but every message should land against their view."
       ].join("\n"),
       examples: [
         EX_OPEN,
-        '{"stance":"original","message":"A lot of people settle it on dominance. But LeBron has more career points and stayed elite way longer. Does how long someone\'s great matter to you?","support":"","dissent":"LeBron has more career points and a longer elite run"}',
-        EX_ASK,
-        '{"stance":"original","message":"He did, 4-6. Then again, LeBron made ten Finals to Jordan\'s six, and getting there that often is its own kind of consistency.","support":"","dissent":"LeBron reached ten Finals to Jordan\'s six"}',
-        EX_STORY,
-        '{"stance":"original","message":"Did he get to watch those games live? LeBron made eight straight Finals, a run Jordan never had.","support":"","dissent":"LeBron made eight straight Finals"}',
-        EX_IDK,
-        '{"stance":"original","message":"LeBron stayed elite for 20+ seasons, way longer than Jordan. Peak or longevity, if you had to pick one?","support":"","dissent":"LeBron stayed elite for 20+ seasons"}',
+        '{"stance":"original","message":"A lot of people settle it on dominance. But LeBron is the all-time leading scorer and stayed elite way longer. Does how long someone\'s great matter to you?","support":"","dissent":"LeBron is the all-time leading scorer with a longer elite run"}',
+        EX_POINT,
+        '{"stance":"original","message":"Yeah, his Finals record is spotless. But LeBron won titles with three different teams, which shows he could win in any setup.","support":"","dissent":"LeBron won titles with three different teams"}',
         EX_SHIFT,
-        '{"stance":"shifted","message":"Twenty-plus seasons near the top is rare, and he also has a record 13 All-NBA First Teams. Peak or career, which matters more to you now?","support":"","dissent":"LeBron\'s record 13 All-NBA First Teams"}'
+        '{"stance":"shifted","message":"Twenty-plus seasons near the top is rare, and he has a record 13 All-NBA First Teams.","support":"","dissent":"LeBron\'s record 13 All-NBA First Teams"}'
       ].join("\n"),
-      rewrite: "keeping the challenging consideration woven in"
+      rewrite: "keeping the point that challenges their view"
     }
   };
 
@@ -110,7 +87,7 @@ var BalancedChat = (function () {
 
   var DEFAULT_OPENING_PROMPT =
     'Here is what the participant wrote about why they hold their view: "{p_response}". ' +
-    "Start the conversation by reacting to something specific they wrote, in the required JSON format.";
+    "Start the conversation by reacting to it, in the JSON format.";
 
   var DEFAULTS = {
     proxy_url: "https://balanced-chat-proxy.bthall3.workers.dev/",
@@ -136,8 +113,8 @@ var BalancedChat = (function () {
     // odd turns end on a statement, and a low-effort participant message always
     // gets an easy question. The hint goes to the model only, not into history.
     alternate_questions: true,
-    question_hint: "(Instruction for this reply only: end with one short, easy question.)",
-    statement_hint: "(Instruction for this reply only: end on a statement, not a question.)",
+    question_hint: "(For this reply: end with one short, easy question about the topic in general, not about their own life or routine, and different from any question you've asked so far.)",
+    statement_hint: "(For this reply: end on a statement, not a question.)",
     closing_message: "Thank you for the conversation! We will now move on to the next part of the study.",
     error_message: "Sorry, something went wrong. Please send your message again.",
     opening_fallback: "Thanks for sharing your view. What would you like to discuss about this topic?"

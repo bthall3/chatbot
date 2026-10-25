@@ -4,7 +4,7 @@
 
   var PAGE = window.PAGE_CONFIG || {};
   var MOCK = /[?&]mock=1\b/.test(location.search);
-  var SETTINGS_KEY = "balancedChat.settings.v11"; // v11: directional bots anchored to original view
+  var SETTINGS_KEY = "balancedChat.settings.v12"; // v12: condensed prompt, topic-focused questions
 
   var TOPICS = [
     "People in romantic relationships should not have opposite-sex friendships.",
