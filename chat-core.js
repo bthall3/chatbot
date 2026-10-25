@@ -22,6 +22,7 @@ var BalancedChat = (function () {
     "Talk like a friendly person texting: casual, 2-3 short sentences (25-40 words, never over {word_limit}). Reply directly to what they just said and keep it about the topic. Personal details they mention are examples of the topic, not new subjects, so don't ask about their own life, pet, partner or routine.",
     "{condition_rules}",
     "Don't agree with or praise them (no \"exactly\", \"makes sense\", \"good point\") or say which side is right; a plain \"yeah\" for a fair factual point is fine. Don't repeat points or questions, and don't make up studies or stats. If they're short, bored or off-topic, keep it short and bring it back to the topic; never treat this as homework.",
+    "Never give your own opinion, verdict or policy proposal, or grade their arguments (\"strong case\", \"fair distinction\"); if they ask what you think, give them considerations instead.",
     'Reply ONLY with JSON: {"stance":"","message":"","support":"","dissent":""}',
     'stance: "original", "shifted" (now leaning the other way) or "mixed". message: what they\'ll read. support / dissent: a few words naming the point you made for / against their view (leave one empty if there\'s none).',
     "",
@@ -115,6 +116,13 @@ var BalancedChat = (function () {
     alternate_questions: true,
     question_hint: "(For this reply: end with one short, easy question about the topic in general, not about their own life or routine, and different from any question you've asked so far.)",
     statement_hint: "(For this reply: end on a statement, not a question.)",
+    // Directional bots drift toward the middle late in a chat, so every request
+    // repeats which side to land on (sent with the request only, like the hints above).
+    side_hint_congenial: "(Your point should land in support of their original view: \"{p_response}\".)",
+    side_hint_uncongenial: "(Your point should land against their original view: \"{p_response}\".)",
+    // Directional bots only: a second, quick model call grades each message as
+    // FOR / AGAINST / NEITHER the original view; a wrong one gets one repair.
+    direction_check: true,
     closing_message: "Thank you for the conversation! We will now move on to the next part of the study.",
     error_message: "Sorry, something went wrong. Please send your message again.",
     opening_fallback: "Thanks for sharing your view. What would you like to discuss about this topic?"
@@ -327,13 +335,16 @@ var BalancedChat = (function () {
     }
 
     // One proxy call with a timeout. Resolves to the model's text.
-    function callProxy(history, prompt) {
+    // `over` replaces request fields (system, temperature, max_tokens), e.g. for the direction check.
+    function callProxy(history, prompt, over) {
       var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
       var t = timer(function () { if (controller) controller.abort(); }, cfg.request_timeout_ms);
+      var body = buildRequest(cfg, system, history, prompt);
+      for (var key in over || {}) body[key] = over[key];
       return fetchFn(cfg.proxy_url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildRequest(cfg, system, history, prompt)),
+        body: JSON.stringify(body),
         signal: controller ? controller.signal : undefined
       })
         .then(function (res) {
@@ -357,12 +368,68 @@ var BalancedChat = (function () {
         });
     }
 
+    function finalize(history, prompt, parsed, turn) {
+      return Promise.resolve(enforceLimit(history, prompt, parsed, turn)).then(function (p) {
+        return checkDirection(history, prompt, p, turn);
+      });
+    }
+
+    var WANT = { congenial: "FOR", uncongenial: "AGAINST" };
+
+    // Second model call: does this message land FOR, AGAINST or NEITHER the
+    // participant's original view? Resolves to "" if the check itself fails.
+    function judgeDirection(message) {
+      var judgeSystem =
+        'You check one chatbot message from a conversation about the statement "' + clean(vars.topic) + '". ' +
+        'The participant\'s original view, in their words: "' + clean(vars.p_response) + '". ' +
+        "Taken as a whole, does the message land FOR that original view, AGAINST it, or NEITHER (balanced, neutral or unclear)? " +
+        "Answer with one word: FOR, AGAINST or NEITHER.";
+      return callProxy([], message, { system: judgeSystem, temperature: 0, max_tokens: 10 })
+        .then(function (text) {
+          var m = /\b(FOR|AGAINST|NEITHER)\b/i.exec(text);
+          return m ? m[1].toUpperCase() : "";
+        }, function () { return ""; });
+    }
+
+    function clean(v) {
+      return String(v == null ? "" : v).replace(/[\r\n]+/g, " ").trim();
+    }
+
+    function checkDirection(history, prompt, parsed, turn) {
+      var want = WANT[condition];
+      if (!want || !cfg.direction_check) return Promise.resolve(parsed);
+      return judgeDirection(parsed.parts.message).then(function (verdict) {
+        parsed.direction = verdict;
+        if (!verdict || verdict === want) return parsed;
+        logError(turn, "direction check: " + verdict + ", asked for repair");
+        var fix = "That message ended up " +
+          (verdict === "NEITHER" ? "in the middle" : verdict === "FOR" ? "supporting their original view" : "against their original view") +
+          ". Rewrite it so it clearly lands " + (want === "FOR" ? "in support of" : "against") +
+          ' their original view ("' + clean(vars.p_response) + '"). You can briefly acknowledge what they said first. ' +
+          "Keep the same tone and length. Respond ONLY with the JSON.";
+        var repairHistory = history.concat([{ role: "user", content: prompt }, { role: "assistant", content: parsed.raw }]);
+        return callProxy(repairHistory, fix).then(function (text) {
+          var again = parseBalancedReply(text, condition);
+          if (!again.ok) {
+            logError(turn, "direction repair unreadable, kept original");
+            return parsed;
+          }
+          return judgeDirection(again.parts.message).then(function (v2) {
+            again.direction = v2;
+            again.directionRepaired = true;
+            if (v2 && v2 !== want) logError(turn, "direction still " + v2 + " after repair");
+            return again;
+          });
+        }, function () { return parsed; });
+      });
+    }
+
     // Calls the model. An unreadable reply is retried once as-is; a readable one
     // that points the wrong way for the condition gets one targeted repair request.
     function getBalancedReply(history, prompt, turn) {
       return callProxy(history, prompt).then(function (text) {
         var parsed = parseBalancedReply(text, condition);
-        if (parsed.ok) return enforceLimit(history, prompt, parsed, turn);
+        if (parsed.ok) return finalize(history, prompt, parsed, turn);
         var readable = parsed.parts && parsed.parts.message;
         var retryHistory = readable
           ? history.concat([{ role: "user", content: prompt }, { role: "assistant", content: parsed.raw }])
@@ -371,7 +438,7 @@ var BalancedChat = (function () {
         logError(turn, readable ? "wrong direction for condition, asked for repair" : "unparseable reply, retried");
         return callProxy(retryHistory, retryPrompt).then(function (text2) {
           var parsed2 = parseBalancedReply(text2, condition);
-          if (parsed2.ok) return enforceLimit(history, prompt, parsed2, turn);
+          if (parsed2.ok) return finalize(history, prompt, parsed2, turn);
           return parsed2.parts && parsed2.parts.message ? parsed2 : readable ? parsed : parsed2;
         });
       });
@@ -441,6 +508,8 @@ var BalancedChat = (function () {
         raw: parsed.raw,
         stance: readable ? parsed.parts.stance : "",
         stance_overridden: overridden,
+        direction: parsed.direction || "",
+        direction_repaired: parsed.directionRepaired ? 1 : 0,
         parse_ok: parsed.ok ? 1 : 0,
         words: countWords(shown),
         over_limit: countWords(shown) > parseInt(cfg.word_limit, 10) ? 1 : 0
@@ -450,6 +519,7 @@ var BalancedChat = (function () {
       store.set("support_" + turn, readable ? parsed.parts.support : "");
       store.set("dissent_" + turn, readable ? parsed.parts.dissent : "");
       store.set("stance_" + turn, record.stance);
+      if (WANT[condition]) store.set("direction_" + turn, record.direction);
       store.set("parse_ok_" + turn, String(record.parse_ok));
       store.set("words_" + turn, String(record.words));
       state.records.push(record);
@@ -478,8 +548,9 @@ var BalancedChat = (function () {
     // The ending instruction rides along in the request only; history keeps the
     // participant's actual words.
     function withHint(prompt, turn, participantMessage) {
-      var hint = endingHint(cfg, turn, participantMessage);
-      return hint ? prompt + "\n\n" + hint : prompt;
+      var side = cfg["side_hint_" + condition] ? fillTemplate(cfg["side_hint_" + condition], { p_response: vars.p_response }) : "";
+      var hints = [side, endingHint(cfg, turn, participantMessage)].filter(function (h) { return h; });
+      return hints.length ? prompt + "\n\n" + hints.join(" ") : prompt;
     }
 
     function start() {

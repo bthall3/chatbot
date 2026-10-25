@@ -113,7 +113,7 @@ test("prompt: short, conversational, on-topic, balance in every message, follows
   // kept short on purpose
   for (const cond of Object.keys(BC.CONDITIONS)) {
     const words = BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: cond }), { topic: "T", p_response: "R" }).split(/\s+/).length;
-    assert.ok(words < 400, cond + " prompt is " + words + " words");
+    assert.ok(words < 430, cond + " prompt is " + words + " words");
   }
 });
 
@@ -176,13 +176,13 @@ test("validity depends on the condition; directional bots may also report an ack
 test("congenial chat: a reply missing its supporting point gets a targeted repair; rewrite request matches the condition", async () => {
   const forOnly = (m) => JSON.stringify({ stance: "original", message: m, support: "for", dissent: "" });
   const againstOnly = JSON.stringify({ stance: "original", message: "Only a challenge.", support: "", dissent: "against" });
-  const t = setup([againstOnly, forOnly("Supportive reply.")], { condition: "congenial" });
+  const t = setup([againstOnly, forOnly("Supportive reply.")], { condition: "congenial", direction_check: false });
   await t.chat.start();
   assert.match(t.log.error_0, /asked for repair/);
   assert.match(t.calls[1].prompt, /missing a consideration that supports their original view/);
   assert.equal(t.calls[1].history.length, 2); // original prompt + the reply being repaired
   assert.equal(t.log.response_0, "Supportive reply.");
-  const t2 = setup([forOnly(words(70)), forOnly(words(40))], { condition: "congenial" });
+  const t2 = setup([forOnly(words(70)), forOnly(words(40))], { condition: "congenial", direction_check: false });
   await t2.chat.start();
   assert.match(t2.calls[1].prompt, /keeping the point that supports their view/);
 });
@@ -424,7 +424,7 @@ test("lenient parsing: a stray trailing comma or quote before } is tolerated", (
 
 test("an uncongenial message that concedes first but challenges is accepted without a repair", async () => {
   const conceding = JSON.stringify({ stance: "original", message: "That can help, but here's the catch.", support: "that can help", dissent: "the catch" });
-  const t = setup([conceding], { condition: "uncongenial" });
+  const t = setup([conceding], { condition: "uncongenial", direction_check: false });
   await t.chat.start();
   assert.equal(t.calls.length, 1);
   assert.equal(t.log.parse_ok_0, "1");
@@ -446,4 +446,77 @@ test("worked examples never ask the participant personal questions or repeat a c
     const points = parts.flatMap((p) => [p.support, p.dissent]).filter(Boolean);
     assert.equal(new Set(points).size, points.length, cond + " repeats a consideration");
   }
+});
+
+// ---------- side reminder and direction check ----------
+test("prompt forbids the bot's own opinions, verdicts and policy proposals", () => {
+  const sys = BC.buildSystemPrompt(BC.DEFAULTS, { topic: "T", p_response: "R" });
+  assert.match(sys, /Never give your own opinion, verdict or policy proposal, or grade their arguments/);
+  assert.match(sys, /if they ask what you think, give them considerations instead/);
+});
+
+// A fetch that answers direction-check requests from `verdicts` and chat requests from `replies`.
+function routed(replies, verdicts, calls) {
+  return (url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push(body);
+    const judging = /^You check one chatbot message/.test(body.system);
+    const text = judging ? verdicts.shift() : replies.shift();
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ text }) });
+  };
+}
+
+test("directional bots get a side reminder each turn; balanced does not", async () => {
+  const calls = [];
+  const forOnly = JSON.stringify({ stance: "original", message: "For.", support: "a", dissent: "" });
+  const t = setup([], { condition: "congenial", max_messages: 5 }, { fetch: routed([forOnly, forOnly], ["FOR", "FOR"], calls) });
+  await t.chat.start();
+  await t.say("I still think so because of my experience with it");
+  const chatCalls = calls.filter((c) => !/^You check/.test(c.system));
+  assert.match(chatCalls[0].prompt, /land in support of their original view: "He was dominant\."/);
+  assert.match(chatCalls[1].prompt, /^I still think so because of my experience with it\n\n\(Your point should land in support/);
+  assert.equal(t.chat.state.history[1].content, "I still think so because of my experience with it"); // not in history
+  const b = setup([good(0)]);
+  await b.chat.start();
+  assert.doesNotMatch(b.calls[0].prompt, /original view/);
+});
+
+test("direction check: on-side message passes with one judge call and is logged", async () => {
+  const calls = [];
+  const forOnly = JSON.stringify({ stance: "original", message: "For.", support: "a", dissent: "" });
+  const t = setup([], { condition: "congenial" }, { fetch: routed([forOnly], ["FOR"], calls) });
+  await t.chat.start();
+  const judge = calls.find((c) => /^You check/.test(c.system));
+  assert.match(judge.system, /original view, in their words: "He was dominant\."/);
+  assert.equal(judge.prompt, "For.");
+  assert.equal(judge.temperature, 0);
+  assert.equal(t.log.direction_0, "FOR");
+  assert.equal(calls.length, 2);
+});
+
+test("direction check: a drifted message gets one repair, which is re-judged and shown", async () => {
+  const calls = [];
+  const drifted = JSON.stringify({ stance: "shifted", message: "Life without parole is the safer standard.", support: "mislabeled", dissent: "" });
+  const fixed = JSON.stringify({ stance: "shifted", message: "Even so, some crimes may deserve the ultimate penalty.", support: "proportional justice", dissent: "" });
+  const t = setup([], { condition: "congenial" }, { fetch: routed([drifted, fixed], ["AGAINST", "FOR"], calls) });
+  await t.chat.start();
+  const repair = calls.filter((c) => !/^You check/.test(c.system))[1];
+  assert.match(repair.prompt, /ended up against their original view\. Rewrite it so it clearly lands in support of their original view/);
+  assert.equal(t.log.response_0, "Even so, some crimes may deserve the ultimate penalty.");
+  assert.equal(t.log.direction_0, "FOR");
+  assert.equal(t.chat.state.records[0].direction_repaired, 1);
+  assert.match(t.log.error_0, /direction check: AGAINST, asked for repair/);
+});
+
+test("direction check: uncongenial wants AGAINST; a failed check never blocks the chat", async () => {
+  const calls = [];
+  const against = JSON.stringify({ stance: "original", message: "Against.", support: "", dissent: "b" });
+  const t = setup([], { condition: "uncongenial" }, { fetch: routed([against], ["I'm not sure"], calls) });
+  await t.chat.start();
+  assert.equal(t.log.response_0, "Against.");
+  assert.equal(t.log.direction_0, "");
+  assert.equal(calls.length, 2);
+  const t2 = setup([], { condition: "uncongenial", direction_check: false }, { fetch: routed([against], [], []) });
+  await t2.chat.start();
+  assert.equal(t2.log.response_0, "Against.");
 });

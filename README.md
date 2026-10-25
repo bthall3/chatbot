@@ -10,6 +10,8 @@ This is a test page for the study's information-exposure chatbots, from the sele
 
 All three use **the same prompt**. Only the condition rules (`{condition_rules}`) and the worked examples (`{examples}`) differ; a unit test checks that everything else is identical. The directional bots stay anchored to the participant's **original** view for the whole chat, as in selective exposure designs. Congenial keeps backing it even if they start to doubt it, and uncongenial keeps challenging it. They may briefly acknowledge what the participant said (e.g. "that can help, but…") as long as each message clearly lands on their side. The balanced bot instead follows the participant's *current* leaning (see below). Congenial and uncongenial give one consideration per message versus two for balanced, so amount of information is confounded with direction.
 
+**Keeping the directional bots on their side:** every request to a congenial or uncongenial bot repeats which side its point must land on, quoting the participant's original view (sent with the request, not stored in the history). A second, quick model call then grades each message as `FOR`, `AGAINST` or `NEITHER` the original view (`direction_N`). A message on the wrong side gets one rewrite, which is graded again. This is the **Direction check** setting.
+
 The rest of this README describes the balanced bot; the same style, length, neutrality and question rules apply to all three.
 
 The bot is a **conversation partner first**. It replies to what the participant actually said, answers their questions and picks up their examples. **Every message** also weaves in, naturally and without lists or labels:
@@ -67,6 +69,7 @@ Add `?mock=1` to the URL to test the page without calling the API:
 - `response_N`: the bot's message as shown; `response_0` is the opening message.
 - `support_N`, `dissent_N`: the model's summary of the consideration it wove in for the participant's current leaning, and the one from the other side. After a shift, the dissent is the gentle counterpoint.
 - `stance_N`: the model's read of the participant: `original`, `shifted` or `mixed`.
+- `direction_N` (congenial/uncongenial): the direction check's verdict on the message shown, `FOR`, `AGAINST` or `NEITHER` the original view (empty if the check didn't return a verdict).
 - `words_N`: word count of the reply as shown.
 - `parse_ok_N`: `0` if the reply was unreadable (raw text shown) or pointed the wrong way for the condition after one retry (the model's message is shown; `support_N`/`dissent_N` show what it reported).
 - `error_N`: network or format problems on that turn.
