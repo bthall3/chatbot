@@ -94,8 +94,12 @@ var BalancedChat = (function () {
     side_hint_congenial: "(Your point should land in support of their original view: \"{p_response}\".)",
     side_hint_uncongenial: "(Your point should land against their original view: \"{p_response}\".)",
     // Directional bots only: a second, quick model call grades each message as
-    // FOR / AGAINST / NEITHER the original view; a wrong one gets one repair.
+    // FOR / AGAINST / NEITHER the original view while it is being shown. If it
+    // landed on the wrong side, the next request swaps the side reminder for this
+    // correction ({drift} says how the last message came across).
     direction_check: true,
+    direction_fix_hint_congenial: "(Your last message came across as {drift}. Make sure this one lands in support of their original view: \"{p_response}\".)",
+    direction_fix_hint_uncongenial: "(Your last message came across as {drift}. Make sure this one lands against their original view: \"{p_response}\".)",
     closing_message: "Thank you for the conversation! We will now move on to the next part of the study.",
     error_message: "Sorry, something went wrong. Please send your message again.",
     opening_fallback: "Thanks for sharing your view. What would you like to discuss about this topic?"
@@ -104,7 +108,7 @@ var BalancedChat = (function () {
   // Only known placeholders are filled, so JSON braces in the template are left alone.
   // ack/reply/point/question_words are kept so older saved prompts still fill in.
   function fillTemplate(template, vars) {
-    return String(template).replace(/\{(topic|p_response|word_limit|ack_words|reply_words|point_words|soft_words|question_words)\}/g, function (m, key) {
+    return String(template).replace(/\{(topic|p_response|drift|word_limit|ack_words|reply_words|point_words|soft_words|question_words)\}/g, function (m, key) {
       var v = vars[key];
       return v === undefined || v === null ? "" : String(v).replace(/[\r\n]+/g, " ").trim();
     });
@@ -343,12 +347,11 @@ var BalancedChat = (function () {
     }
 
     function finalize(history, prompt, parsed, turn) {
-      return Promise.resolve(enforceLimit(history, prompt, parsed, turn)).then(function (p) {
-        return checkDirection(history, prompt, p, turn);
-      });
+      return Promise.resolve(enforceLimit(history, prompt, parsed, turn));
     }
 
     var WANT = { congenial: "FOR", uncongenial: "AGAINST" };
+    var DRIFT = { FOR: "supporting their original view", AGAINST: "against their original view", NEITHER: "neutral or in the middle" };
 
     // Second model call: does this message land FOR, AGAINST or NEITHER the
     // participant's original view? Resolves to "" if the check itself fails.
@@ -369,32 +372,14 @@ var BalancedChat = (function () {
       return String(v == null ? "" : v).replace(/[\r\n]+/g, " ").trim();
     }
 
-    function checkDirection(history, prompt, parsed, turn) {
-      var want = WANT[condition];
-      if (!want || !cfg.direction_check) return Promise.resolve(parsed);
-      return judgeDirection(parsed.parts.message).then(function (verdict) {
-        parsed.direction = verdict;
-        if (!verdict || verdict === want) return parsed;
-        logError(turn, "direction check: " + verdict + ", asked for repair");
-        var fix = "That message ended up " +
-          (verdict === "NEITHER" ? "in the middle" : verdict === "FOR" ? "supporting their original view" : "against their original view") +
-          ". Rewrite it so it clearly lands " + (want === "FOR" ? "in support of" : "against") +
-          ' their original view ("' + clean(vars.p_response) + '"). You can briefly acknowledge what they said first. ' +
-          "Keep the same tone and length. Respond ONLY with the JSON.";
-        var repairHistory = history.concat([{ role: "user", content: prompt }, { role: "assistant", content: parsed.raw }]);
-        return callProxy(repairHistory, fix).then(function (text) {
-          var again = parseBalancedReply(text, condition);
-          if (!again.ok) {
-            logError(turn, "direction repair unreadable, kept original");
-            return parsed;
-          }
-          return judgeDirection(again.parts.message).then(function (v2) {
-            again.direction = v2;
-            again.directionRepaired = true;
-            if (v2 && v2 !== want) logError(turn, "direction still " + v2 + " after repair");
-            return again;
-          });
-        }, function () { return parsed; });
+    // Grades the message just shown; the verdict steers the next reply (see withHint).
+    // Nothing is rewritten, so the check adds no wait beyond the typing delay.
+    function checkDirection(record) {
+      if (!WANT[condition] || !cfg.direction_check || !record.parse_ok) return Promise.resolve();
+      return judgeDirection(record.shown).then(function (verdict) {
+        record.direction = verdict;
+        store.set("direction_" + record.turn, verdict);
+        if (verdict && verdict !== WANT[condition]) logError(record.turn, "direction check: " + verdict + ", next reply steered back");
       });
     }
 
@@ -482,8 +467,7 @@ var BalancedChat = (function () {
         raw: parsed.raw,
         stance: readable ? parsed.parts.stance : "",
         stance_overridden: overridden,
-        direction: parsed.direction || "",
-        direction_repaired: parsed.directionRepaired ? 1 : 0,
+        direction: "",
         parse_ok: parsed.ok ? 1 : 0,
         words: countWords(shown),
         over_limit: countWords(shown) > parseInt(cfg.word_limit, 10) ? 1 : 0
@@ -506,23 +490,29 @@ var BalancedChat = (function () {
       return record;
     }
 
+    // The direction check runs during the typing delay; the bubble waits for both.
     function showAfterDelay(record) {
       var delay = Math.min(countWords(record.shown) * Number(cfg.delay_ms_per_word || 0), cfg.max_delay_ms);
+      var checked = checkDirection(record);
       return new Promise(function (resolve) {
-        timer(function () {
+        timer(function () { checked.then(go, go); }, delay);
+        function go() {
           if (state.stopped) return resolve(null);
           setBusy(false);
           addBubble(record.shown, "bot");
           onBotReply(record);
           resolve(record);
-        }, delay);
+        }
       });
     }
 
     // The ending instruction rides along in the request only; history keeps the
     // participant's actual words.
     function withHint(prompt, turn, participantMessage) {
-      var side = cfg["side_hint_" + condition] ? fillTemplate(cfg["side_hint_" + condition], { p_response: vars.p_response }) : "";
+      var last = state.records[state.records.length - 1];
+      var drifted = last && last.direction && WANT[condition] && last.direction !== WANT[condition];
+      var sideKey = (drifted ? "direction_fix_hint_" : "side_hint_") + condition;
+      var side = cfg[sideKey] ? fillTemplate(cfg[sideKey], { p_response: vars.p_response, drift: drifted ? DRIFT[last.direction] : "" }) : "";
       var hints = [side, endingHint(cfg, turn, participantMessage)].filter(function (h) { return h; });
       return hints.length ? prompt + "\n\n" + hints.join(" ") : prompt;
     }

@@ -233,7 +233,7 @@
     if (record.user) addTranscriptEntry("You", record.user);
     var meta = record.words + " words" + (record.over_limit ? " (over limit)" : "") +
       (record.stance === "shifted" ? " \u00B7 participant shifted" : record.stance === "mixed" ? " \u00B7 participant mixed" : "") +
-      (record.direction ? " \u00B7 direction check: " + record.direction + (record.direction_repaired ? " (repaired)" : "") : "") +
+      (record.direction ? " \u00B7 direction check: " + record.direction : "") +
       (record.parse_ok ? "" : " \u00B7 not in the balanced format");
     addTranscriptEntry("Bot", record.shown, meta);
   }
@@ -259,7 +259,6 @@
           dissent: r.parts ? r.parts.dissent : "",
           stance: r.stance,
           direction: r.direction,
-          direction_repaired: r.direction_repaired,
           parse_ok: r.parse_ok,
           words: r.words,
           over_limit: r.over_limit
@@ -290,7 +289,7 @@
     rep.turns.forEach(function (t) {
       lines.push("", "--- " + (t.turn === 0 ? "Opening reply" : "Turn " + t.turn) + " ---");
       if (t.participant) lines.push("Participant: " + t.participant);
-      lines.push("Bot (" + t.words + " words, " + (t.parse_ok ? "stance: " + (t.stance || "?") + (t.direction ? ", direction: " + t.direction + (t.direction_repaired ? " (repaired)" : "") : "") : "NOT balanced format") + "): " + t.bot_shown);
+      lines.push("Bot (" + t.words + " words, " + (t.parse_ok ? "stance: " + (t.stance || "?") + (t.direction ? ", direction: " + t.direction : "") : "NOT balanced format") + "): " + t.bot_shown);
       if (t.parse_ok) lines.push("  woven in -> for: " + t.support + " | against: " + t.dissent);
     });
     if (rep.final_message) lines.push("", "Participant (final, no reply by design): " + rep.final_message);

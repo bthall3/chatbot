@@ -466,18 +466,23 @@ test("direction check: on-side message passes with one judge call and is logged"
   assert.equal(calls.length, 2);
 });
 
-test("direction check: a drifted message gets one repair, which is re-judged and shown", async () => {
+test("direction check: a drifted message is shown as is and the next reply is steered back", async () => {
   const calls = [];
   const drifted = JSON.stringify({ stance: "shifted", message: "Life without parole is the safer standard.", support: "mislabeled", dissent: "" });
-  const fixed = JSON.stringify({ stance: "shifted", message: "Even so, some crimes may deserve the ultimate penalty.", support: "proportional justice", dissent: "" });
-  const t = setup([], { condition: "congenial" }, { fetch: routed([drifted, fixed], ["AGAINST", "FOR"], calls) });
+  const next = JSON.stringify({ stance: "shifted", message: "Even so, some crimes may deserve the ultimate penalty.", support: "proportional justice", dissent: "" });
+  const t = setup([], { condition: "congenial", max_messages: 5 }, { fetch: routed([drifted, next, next], ["AGAINST", "FOR"], calls) });
   await t.chat.start();
-  const repair = calls.filter((c) => !/^You check/.test(c.system))[1];
-  assert.match(repair.prompt, /ended up against their original view\. Rewrite it so it clearly lands in support of their original view/);
-  assert.equal(t.log.response_0, "Even so, some crimes may deserve the ultimate penalty.");
-  assert.equal(t.log.direction_0, "FOR");
-  assert.equal(t.chat.state.records[0].direction_repaired, 1);
-  assert.match(t.log.error_0, /direction check: AGAINST, asked for repair/);
+  assert.equal(t.log.response_0, "Life without parole is the safer standard.");
+  assert.equal(t.log.direction_0, "AGAINST");
+  assert.match(t.log.error_0, /direction check: AGAINST, next reply steered back/);
+  assert.equal(calls.length, 2); // no rewrite
+  await t.say("I am not sure about that point at all honestly");
+  let chatCalls = calls.filter((c) => !/^You check/.test(c.system));
+  assert.match(chatCalls[1].prompt, /\(Your last message came across as against their original view\. Make sure this one lands in support of their original view: "He was dominant\."\.\)/);
+  assert.equal(t.log.direction_1, "FOR");
+  await t.say("Okay that is a fair point I suppose, tell me more");
+  chatCalls = calls.filter((c) => !/^You check/.test(c.system));
+  assert.match(chatCalls[2].prompt, /\(Your point should land in support of their original view/); // back to the usual reminder
 });
 
 test("direction check: uncongenial wants AGAINST; a failed check never blocks the chat", async () => {

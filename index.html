@@ -5,13 +5,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chatbot Lab</title>
-  <link rel="stylesheet" href="styles.css?v=2026-10-27.1">
+  <link rel="stylesheet" href="styles.css?v=2026-10-27.2">
 </head>
 <body>
   <header class="topbar">
     <h1>Chatbot Lab</h1>
     <p>Test the study chatbots. <strong>Balanced</strong> weaves one point <em>for</em> your view and one <em>against</em> it into each reply; <strong>congenial</strong> gives only a point for it; <strong>uncongenial</strong> only a point against it.</p>
-    <small class="muted" id="version">Version 2026-10-27.1 (minimal prompt + 3 rules)</small>
+    <small class="muted" id="version">Version 2026-10-27.2 (minimal prompt + 3 rules; direction check steers next reply)</small>
     <span id="mock-badge" class="badge" hidden>Mock mode: no real API calls</span>
   </header>
 
@@ -55,7 +55,7 @@
           <small>The opening and every other reply end with a short question; the rest end on a statement. A very short or "idk"-type message always gets an easy question.</small>
         </label>
         <label class="check"><input type="checkbox" name="direction_check"> Direction check (congenial / uncongenial)
-          <small>A second quick model call grades each message as for, against or neither the participant's original view; a message on the wrong side gets one rewrite. Adds about a second per reply.</small>
+          <small>A second quick model call grades each message as for, against or neither the participant's original view while it's shown. If it landed on the wrong side, the next reply is told to steer back. No rewrites, no extra wait.</small>
         </label>
 
         <details>
@@ -123,8 +123,8 @@
     </section>
   </main>
 
-  <script src="config.js?v=2026-10-27.1"></script>
-  <script src="chat-core.js?v=2026-10-27.1"></script>
-  <script src="app.js?v=2026-10-27.1"></script>
+  <script src="config.js?v=2026-10-27.2"></script>
+  <script src="chat-core.js?v=2026-10-27.2"></script>
+  <script src="app.js?v=2026-10-27.2"></script>
 </body>
 </html>
