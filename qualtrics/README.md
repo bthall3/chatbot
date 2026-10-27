@@ -21,7 +21,7 @@ The existing custom CSS (`#chat-container`, `.bot-message`, …) already styles 
 ```
 
 ## 2. Survey flow
-- In the block randomizer, add a group per arm you're running: **Balanced**, **Congenial** and/or **Uncongenial**. Give each an Embedded Data element with `cond = balanced`, `cond = congenial` or `cond = uncongenial`, followed by a chat block. All three use the same question JavaScript; the adapter reads `cond` and switches the condition, so the prompts stay identical except for the direction rules and examples.
+- In the block randomizer, add a group per arm you're running: **Balanced**, **Congenial** and/or **Uncongenial**. Give each an Embedded Data element with `cond = balanced`, `cond = congenial` or `cond = uncongenial`, followed by a chat block. All three use the same question JavaScript; the adapter reads `cond` and switches the condition, so the prompts stay identical except for the direction rules.
   - Don't set `model`, `temperature`, or `prompt` there. The adapter takes those from `cfg` and the defaults.
 - Declare these fields in an Embedded Data element **before** the randomizer, with no value, so `setEmbeddedData` saves them:
   - `msg_1` … `msg_5`, `response_0` … `response_4` (already declared for the other arms)
@@ -30,8 +30,14 @@ The existing custom CSS (`#chat-container`, `.bot-message`, …) already styles 
 
   With `max_messages = 5`, the 5th participant message gets no reply by design, so `response_5` stays empty.
 
+- **Belief condition:** randomize `value_cond = high` or `value_cond = low` before the belief questions, and show the matching prompt (display logic on two text-entry questions, or one question with piped text):
+  - high: "Think of a belief you hold that is very important to you, one that reflects your core values. Write it as a short statement."
+  - low: "Think of a belief you hold that is not very important to you, an opinion you have but don't care much about. Write it as a short statement."
+
+  Then ask "Why do you hold this belief?". Set `topic` to the belief and `p_response` to the reason in an Embedded Data element after those questions (piped `${q://QIDx/ChoiceTextEntryValue}`). `value_cond` is saved by the survey itself; the chat code doesn't need it.
+
 ## 3. Check before launch
-- **`p_response` and `topic`:** in the launched flow these are set to `${q://QID10/ChoiceTextEntryValue}Custom Value` and `${q://QID8/ChoiceGroup/SelectedChoices}Custom Value`. The trailing "Custom Value" is very likely leftover placeholder text that ends up in the prompt. Remove it, then preview and check the stored values.
+- **`p_response` and `topic`:** the launched flow set these with a trailing "Custom Value", which is very likely leftover placeholder text that ends up in the prompt. Make sure the new piped values have nothing extra, then preview and check the stored values.
 - **Preview test:** run one preview of the balanced arm. Confirm that `response_N`, `support_N`, and `dissent_N` all filled in and that `parse_ok_N` is `1`.
 
 ## Differences from the launched arms (note these in the methods)

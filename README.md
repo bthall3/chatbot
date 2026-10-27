@@ -8,7 +8,7 @@ This is a test page for the study's information-exposure chatbots, from the sele
 | **congenial** | one consideration **for** their *original* view (the one they wrote before the chat) |
 | **uncongenial** | one consideration **against** their *original* view |
 
-All three use **the same prompt**. Only the condition rules (`{condition_rules}`) and the worked examples (`{examples}`) differ; a unit test checks that everything else is identical. The directional bots stay anchored to the participant's **original** view for the whole chat, as in selective exposure designs. Congenial keeps backing it even if they start to doubt it, and uncongenial keeps challenging it. They may briefly acknowledge what the participant said (e.g. "that can help, but…") as long as each message clearly lands on their side. The balanced bot instead follows the participant's *current* leaning (see below). Congenial and uncongenial give one consideration per message versus two for balanced, so amount of information is confounded with direction.
+All three use **the same prompt**. Only the condition rules (`{condition_rules}`) differ; a unit test checks that everything else is identical. The directional bots stay anchored to the participant's **original** view for the whole chat, as in selective exposure designs. Congenial keeps backing it even if they start to doubt it, and uncongenial keeps challenging it. They may briefly acknowledge what the participant said (e.g. "that can help, but…") as long as each message clearly lands on their side. The balanced bot instead follows the participant's *current* leaning (see below). Congenial and uncongenial give one consideration per message versus two for balanced, so amount of information is confounded with direction.
 
 **Keeping the directional bots on their side:** every request to a congenial or uncongenial bot repeats which side its point must land on, quoting the participant's original view (sent with the request, not stored in the history). While each message is being shown, a second, quick model call grades it as `FOR`, `AGAINST` or `NEITHER` the original view (`direction_N`). Nothing is rewritten: if the message landed on the wrong side, the next request replaces the usual side reminder with a correction ("Your last message came across as neutral or in the middle. Make sure this one lands against their original view…"). The check runs during the typing delay, so it adds no wait. This is the **Direction check** setting.
 
@@ -33,7 +33,7 @@ The model writes the whole message itself, and the page shows it as-is. It answe
 Open the GitHub Pages URL; mock mode is described further down.
 
 - **Left:** edit the system prompt and settings, then click **Apply & restart chat**. Your edits are saved in your browser.
-- **Middle:** pick a topic or write your own, explain your view, and chat. The page stops after the set number of messages (5 by default).
+- **Middle:** pick the belief condition (high- or low-value), write a belief in answer to that condition's prompt, say why you hold it, and chat. The belief becomes the chat topic (`{topic}`) and the reason becomes their view (`{p_response}`). Both prompts can be edited under **Advanced**. The page stops after the set number of messages (5 by default).
 - **Right:** the transcript builds up as you chat. Add your overall notes at the bottom and click **Email feedback**, which sends the transcript, notes and settings. **Download JSON** is a fallback.
 
 Add `?mock=1` to the URL to test the page without calling the API:

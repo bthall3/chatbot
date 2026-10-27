@@ -4,24 +4,18 @@
 
   var PAGE = window.PAGE_CONFIG || {};
   var MOCK = /[?&]mock=1\b/.test(location.search);
-  var SETTINGS_KEY = "balancedChat.settings.v15"; // v15: minimal prompt + no praise / no repeats / no homework
+  var SETTINGS_KEY = "balancedChat.settings.v16"; // v16: participant writes a high- or low-value belief
 
-  var TOPICS = [
-    "People in romantic relationships should not have opposite-sex friendships.",
-    "In heterosexual romantic relationships, the man should be the breadwinner.",
-    "People should be totally comfortable being alone before getting into a relationship.",
-    "Watching pornography in a relationship is a form of cheating.",
-    "People of different religions should avoid being in romantic relationships.",
-    "Couples should keep their finances completely separate.",
-    "People in romantic relationships should have each other’s phone passwords.",
-    "People in romantic relationships should have each other’s location.",
-    "Cohabiting before marriage is essential for a healthy relationship."
-  ];
-  var OTHER = "__other__";
+  // Shown on the start form for each belief condition (editable under Advanced).
+  var PAGE_DEFAULTS = {
+    high_value_prompt: "Think of a belief you hold that is very important to you, one that reflects your core values. Write it as a short statement.",
+    low_value_prompt: "Think of a belief you hold that is not very important to you, an opinion you have but don't care much about. Write it as a short statement."
+  };
 
   var EDITABLE = [
     "condition", "prompt_template", "opening_template", "proxy_url", "model", "reasoning_effort", "temperature", "max_tokens", "word_limit",
-    "max_messages", "delay_ms_per_word", "enforce_word_limit", "alternate_questions", "direction_check"
+    "max_messages", "delay_ms_per_word", "enforce_word_limit", "alternate_questions", "direction_check",
+    "high_value_prompt", "low_value_prompt"
   ];
   var NUMERIC = { temperature: 1, max_tokens: 1, word_limit: 1, max_messages: 1, delay_ms_per_word: 1 };
 
@@ -51,7 +45,7 @@
 
   function fillSettings(values) {
     EDITABLE.forEach(function (key) {
-      var v = values[key] !== undefined ? values[key] : BalancedChat.DEFAULTS[key];
+      var v = values[key] !== undefined ? values[key] : key in PAGE_DEFAULTS ? PAGE_DEFAULTS[key] : BalancedChat.DEFAULTS[key];
       var el = settingsForm.elements[key];
       if (el.type === "checkbox") el.checked = !!v;
       else el.value = v;
@@ -66,6 +60,7 @@
   settingsForm.addEventListener("submit", function (e) {
     e.preventDefault();
     save(currentSettings());
+    showBeliefPrompt();
     if (session) {
       startConversation(session.vars);
       flash($("settings-status"), "Applied. Conversation restarted with the new settings.", "ok");
@@ -78,28 +73,27 @@
     if (!confirm("Reset the prompt and all settings to the defaults?")) return;
     save({});
     fillSettings({});
+    showBeliefPrompt();
     flash($("settings-status"), "Defaults restored. Click Apply to use them.", "");
   });
 
   // ---------- setup form ----------
-  var topicSelect = $("topic-select");
-  topicSelect.appendChild(new Option("Choose a topic…", ""));
-  TOPICS.forEach(function (t) { topicSelect.appendChild(new Option(t, t)); });
-  topicSelect.appendChild(new Option("Other (write your own)", OTHER));
-  topicSelect.addEventListener("change", function () {
-    $("topic-other").hidden = topicSelect.value !== OTHER;
-    $("topic-other").required = topicSelect.value === OTHER;
-  });
+  // The participant writes the belief (it becomes the chat's {topic}) in answer to
+  // the prompt for their belief condition, then explains why ({p_response}).
+  function showBeliefPrompt() {
+    $("belief-prompt").textContent = settingsForm.elements[$("value-cond").value + "_value_prompt"].value;
+  }
+  $("value-cond").addEventListener("change", showBeliefPrompt);
   $("p-response").addEventListener("input", function () {
     $("char-count").textContent = this.value.length + " / 500";
   });
 
   $("setup-form").addEventListener("submit", function (e) {
     e.preventDefault();
-    var topic = topicSelect.value === OTHER ? $("topic-other").value.trim() : topicSelect.value;
+    var topic = $("belief").value.trim();
     var pResponse = $("p-response").value.trim();
     if (!topic || !pResponse) return;
-    startConversation({ topic: topic, p_response: pResponse });
+    startConversation({ topic: topic, p_response: pResponse, value_cond: $("value-cond").value });
   });
 
   $("new-chat").addEventListener("click", function () {
@@ -178,7 +172,7 @@
     $("chat-error").hidden = true;
     $("setup-form").hidden = true;
     $("chat-area").hidden = false;
-    $("topic-shown").textContent = vars.topic + "  (" + cfg.condition + " bot)";
+    $("topic-shown").textContent = vars.topic + "  (" + vars.value_cond + "-value belief, " + cfg.condition + " bot)";
 
     var chat = BalancedChat.createChat({
       cfg: cfg,
@@ -245,6 +239,7 @@
       submitted_at: new Date().toISOString(),
       conversation_started: session.id,
       condition: session.cfg.condition,
+      value_cond: session.vars.value_cond,
       topic: session.vars.topic,
       p_response: session.vars.p_response,
       settings: session.cfg,
@@ -278,8 +273,9 @@
       "Tester: " + (rep.tester || "(not given)"),
       "Bot condition: " + rep.condition,
       "Submitted: " + rep.submitted_at + (rep.mock ? "  [MOCK MODE]" : ""),
-      "Topic: " + rep.topic,
-      "Participant explanation: " + rep.p_response,
+      "Belief condition: " + rep.value_cond + "-value",
+      "Belief: " + rep.topic,
+      "Why they hold it: " + rep.p_response,
       "",
       "OVERALL NOTES:",
       rep.overall_notes || "(none)",
@@ -345,7 +341,7 @@
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
         access_key: key,
-        subject: (PAGE.email_subject || "Chatbot feedback") + " [" + rep.condition + "]" + (rep.tester ? " from " + rep.tester : ""),
+        subject: (PAGE.email_subject || "Chatbot feedback") + " [" + rep.condition + ", " + rep.value_cond + "-value]" + (rep.tester ? " from " + rep.tester : ""),
         from_name: rep.tester || "Balanced Chatbot Lab",
         message: text
       })
@@ -402,5 +398,6 @@
 
   // ---------- init ----------
   fillSettings(loadSaved());
+  showBeliefPrompt();
   $("mock-badge").hidden = !MOCK;
 })();

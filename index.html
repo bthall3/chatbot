@@ -5,13 +5,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chatbot Lab</title>
-  <link rel="stylesheet" href="styles.css?v=2026-10-27.2">
+  <link rel="stylesheet" href="styles.css?v=2026-10-27.3">
 </head>
 <body>
   <header class="topbar">
     <h1>Chatbot Lab</h1>
     <p>Test the study chatbots. <strong>Balanced</strong> weaves one point <em>for</em> your view and one <em>against</em> it into each reply; <strong>congenial</strong> gives only a point for it; <strong>uncongenial</strong> only a point against it.</p>
-    <small class="muted" id="version">Version 2026-10-27.2 (minimal prompt + 3 rules; direction check steers next reply)</small>
+    <small class="muted" id="version">Version 2026-10-27.3 (participant writes a high- or low-value belief)</small>
     <span id="mock-badge" class="badge" hidden>Mock mode: no real API calls</span>
   </header>
 
@@ -26,7 +26,7 @@
             <option value="congenial">Congenial (supports their original view)</option>
             <option value="uncongenial">Uncongenial (challenges their original view)</option>
           </select>
-          <small>Same prompt for all three; only the condition rules and examples change. Click Apply to switch.</small>
+          <small>Same prompt for all three; only the condition rules change. Click Apply to switch.</small>
         </label>
         <label for="s-prompt_template">System prompt
           <small><code>{topic}</code>, <code>{p_response}</code> and <code>{word_limit}</code> are filled in automatically, and <code>{condition_rules}</code> is replaced by the selected condition's rules. The reply-format instructions the page needs (JSON with stance / message / support / dissent) are always added underneath; see "Prompt actually sent".</small>
@@ -61,6 +61,8 @@
         <details>
           <summary>Advanced</summary>
           <label>Proxy URL <input name="proxy_url" type="url"></label>
+          <label>High-value belief prompt <textarea name="high_value_prompt" rows="3"></textarea></label>
+          <label>Low-value belief prompt <textarea name="low_value_prompt" rows="3"></textarea></label>
           <label>Opening-turn instruction <textarea name="opening_template" rows="4" spellcheck="false"></textarea></label>
         </details>
 
@@ -82,10 +84,16 @@
       <h2 id="chat-title">Chat</h2>
 
       <form id="setup-form" class="card">
-        <label for="topic-select">Pick a topic</label>
-        <select id="topic-select" required></select>
-        <input id="topic-other" type="text" placeholder="Write your own topic, e.g. Michael Jordan is the GOAT" hidden>
-        <label for="p-response">Explain why you hold your view
+        <label for="value-cond">Belief condition
+          <select id="value-cond">
+            <option value="high">High-value belief</option>
+            <option value="low">Low-value belief</option>
+          </select>
+          <small>In the study this is assigned; here you pick it to try both.</small>
+        </label>
+        <p id="belief-prompt" class="belief-prompt"></p>
+        <input id="belief" type="text" maxlength="200" required aria-labelledby="belief-prompt">
+        <label for="p-response">Why do you hold this belief?
           <small>The chatbot uses this to start the conversation (max 500 characters).</small>
         </label>
         <textarea id="p-response" rows="5" maxlength="500" required></textarea>
@@ -94,7 +102,7 @@
       </form>
 
       <div id="chat-area" hidden>
-        <p class="topic-line"><strong>Topic:</strong> <span id="topic-shown"></span></p>
+        <p class="topic-line"><strong>Belief:</strong> <span id="topic-shown"></span></p>
         <div id="chat-error" class="error-box" role="alert" hidden></div>
         <div id="chat-container">
           <div id="chat-history-1"></div>
@@ -123,8 +131,8 @@
     </section>
   </main>
 
-  <script src="config.js?v=2026-10-27.2"></script>
-  <script src="chat-core.js?v=2026-10-27.2"></script>
-  <script src="app.js?v=2026-10-27.2"></script>
+  <script src="config.js?v=2026-10-27.3"></script>
+  <script src="chat-core.js?v=2026-10-27.3"></script>
+  <script src="app.js?v=2026-10-27.3"></script>
 </body>
 </html>

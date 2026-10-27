@@ -111,6 +111,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .error-box { margin: 0 0 8px; padding: 8px 10px; border-radius: 6px; background: var(--error-bg); color: var(--text); font-size: 0.85rem; }
 .error-box code { word-break: break-word; }
 .topic-line { margin: 0 0 8px; font-size: 0.9rem; }
+.belief-prompt { margin: 4px 0; }
 #new-chat { margin-top: 10px; }
 
 /* Chat: same structure and look as the Qualtrics question */
