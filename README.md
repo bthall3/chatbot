@@ -62,7 +62,7 @@ Add `?mock=1` to the URL to test the page without calling the API:
 | `config.js` | Web3Forms key and email subject. |
 | `proxy/` | Cloudflare Worker that forwards chats to OpenAI (supports reasoning models), plus deploy steps. |
 | `qualtrics/` | How to add this as a 4th arm in the survey (`README.md`, `question.html`, `adapter.js`). |
-| `qualtrics/Even_Handed_Chatbot.qsf` | The whole study as a Qualtrics import file, built by `qualtrics/build_qsf.py` (see `qualtrics/README.md`). |
+| `qualtrics/build_qsf.py` | Builds the whole study as a Qualtrics import file from the launched survey's export (see `qualtrics/README.md`). |
 | `qualtrics/topic-phrase.js` | Turns the belief into a short topic phrase for the intellectual humility scale items. |
 | `tests/` | Unit tests: `node --test "tests/*.test.*"` |
 

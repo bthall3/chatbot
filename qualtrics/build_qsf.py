@@ -1,22 +1,62 @@
 """Builds the full study survey as a Qualtrics import file (.qsf).
 
-    python3 qualtrics/build_qsf.py
+    python3 qualtrics/build_qsf.py LAUNCH.qsf [OUT.qsf]
 
-Writes qualtrics/Even_Handed_Chatbot.qsf. Import it in Qualtrics with
-Create project -> Survey -> "Import a QSF file". The chat and topic-phrase
-questions get chat-core.js pasted in from this repo, so rebuild after any change
-to chat-core.js, adapter.js or topic-phrase.js.
+LAUNCH.qsf is an export of a survey that imports fine (the launched "AI
+Interaction" survey). Its survey settings, consent and debriefing are reused,
+and every question is a copy of one of its questions of the same type with new
+text, so the file has the shape Qualtrics expects. Sliders are the one question
+type it doesn't have.
+
+Writes OUT.qsf (default qualtrics/Even_Handed_Chatbot.qsf; *.qsf is git-ignored
+because it contains the consent form). Import it in Qualtrics with Create
+project -> Survey -> "Import a QSF file". The chat and topic-phrase questions get
+chat-core.js pasted in from this repo, so rebuild after any change to
+chat-core.js, adapter.js or topic-phrase.js.
 
 Survey text follows "Even_Handed_Chatbot_Materials_Final.docx".
 """
+import copy
 import json
 import os
 import re
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-OUT = os.path.join(HERE, "Even_Handed_Chatbot.qsf")
-SURVEY_ID = "SV_evenHandedChat01"
+if len(sys.argv) < 2:
+    sys.exit(__doc__)
+OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "Even_Handed_Chatbot.qsf")
+with open(sys.argv[1], encoding="utf-8") as f:
+    BASE = json.load(f)
+BASE_EL = {e["PrimaryAttribute"]: e for e in BASE["SurveyElements"]}
+BASE_Q = [e["Payload"] for e in BASE["SurveyElements"] if e["Element"] == "SQ"]
+
+
+def base_question(match):
+    for p in BASE_Q:
+        if match(p):
+            return copy.deepcopy(p)
+    sys.exit("The base survey has no question like this; is it the launched AI Interaction survey?")
+
+
+def base_of_type(qtype, selector):
+    return base_question(lambda p: p["QuestionType"] == qtype and p.get("Selector") == selector)
+
+# Qualtrics IDs are a prefix plus 15 letters/digits; the importer rejects other shapes.
+# Fixed (not random) so rebuilding gives the same file.
+_ALNUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+
+def qid15(prefix, n):
+    out, x = [], (n + 1) * 2654435761 % (2 ** 61 - 1)
+    for _ in range(15):
+        x = (x * 6364136223846793005 + 1442695040888963407) % (2 ** 64)
+        out.append(_ALNUM[(x >> 33) % len(_ALNUM)])
+    return prefix + "".join(out)
+
+
+SURVEY_ID = BASE["SurveyEntry"]["SurveyID"]
 N_MESSAGES = 7  # participant messages; must match max_messages in adapter.js
 
 
@@ -159,45 +199,56 @@ def force():
     return {"Settings": {"ForceResponse": "ON", "ForceResponseType": "ON", "Type": "None"}}
 
 
-def add(payload):
+# Settings that belong to the copied question, not the new one.
+DROP = ["QuestionJS", "DisplayLogic", "SkipLogic", "ChoiceDataExportTags", "Randomization",
+        "Choices", "ChoiceOrder", "Answers", "AnswerOrder", "DefaultChoices", "RecodeValues", "VariableNaming"]
+
+
+def add(payload, template=None):
     _qid[0] += 1
     qid = "QID%d" % _qid[0]
-    payload = dict(payload)
-    payload.setdefault("DataVisibility", {"Private": False, "Hidden": False})
-    payload.setdefault("Configuration", {"QuestionDescriptionOption": "UseText"})
-    payload.setdefault("Language", [])
-    payload.setdefault("GradingData", [])
-    payload["QuestionID"] = qid
-    payload["QuestionDescription"] = plain(payload["QuestionText"])
+    p = template or {}
+    for key in DROP:
+        p.pop(key, None)
+    p.update(payload)
+    p.setdefault("DataVisibility", {"Private": False, "Hidden": False})
+    p.setdefault("Configuration", {"QuestionDescriptionOption": "UseText"})
+    p.setdefault("Language", [])
+    p.setdefault("GradingData", [])
+    p.setdefault("DefaultChoices", False)
+    p["QuestionID"] = qid
+    p["QuestionDescription"] = plain(p["QuestionText"])
     questions.append({"SurveyID": SURVEY_ID, "Element": "SQ", "PrimaryAttribute": qid,
-                      "SecondaryAttribute": payload["QuestionDescription"], "TertiaryAttribute": None,
-                      "Payload": payload})
+                      "SecondaryAttribute": p["QuestionDescription"], "TertiaryAttribute": None,
+                      "Payload": p})
     return qid
 
 
 def text(tag, html, js=None):
-    p = {"QuestionText": html, "DataExportTag": tag, "QuestionType": "DB", "Selector": "TB",
-         "ChoiceOrder": [], "Validation": {"Settings": {"Type": "None"}}, "NextChoiceId": 1, "NextAnswerId": 1}
+    p = {"QuestionText": html, "DataExportTag": tag, "ChoiceOrder": []}
     if js:
         p["QuestionJS"] = js
-    return add(p)
+    return add(p, base_of_type("DB", "TB"))
+
+
+def copied(tag, match):
+    """A question copied whole from the base survey (consent, debriefing)."""
+    return add({"DataExportTag": tag}, base_question(match))
 
 
 def entry(tag, html, selector, max_chars, js=None):
     v = {"Settings": {"ForceResponse": "ON", "ForceResponseType": "ON", "Type": "TotalChar",
                       "MinChars": "1", "TotalChars": str(max_chars)}}
-    p = {"QuestionText": html, "DataExportTag": tag, "QuestionType": "TE", "Selector": selector,
-         "Validation": v, "NextChoiceId": 1, "NextAnswerId": 1, "SearchSource": {"AllowFreeResponse": "false"}}
+    p = {"QuestionText": html, "DataExportTag": tag, "Validation": v}
     if js:
         p["QuestionJS"] = js
-    return add(p)
+    return add(p, base_of_type("TE", selector))
 
 
 def number(tag, html):
-    v = {"Settings": {"ForceResponse": "ON", "ForceResponseType": "ON", "Type": "ContentType", "MinChars": "1",
-                      "ContentType": "ValidNumber", "ValidNumber": {"Min": "", "Max": "", "NumDecimals": ""}}}
-    return add({"QuestionText": html, "DataExportTag": tag, "QuestionType": "TE", "Selector": "SL",
-                "Validation": v, "NextChoiceId": 1, "NextAnswerId": 1, "SearchSource": {"AllowFreeResponse": "false"}})
+    return add({"QuestionText": html, "DataExportTag": tag},
+               base_question(lambda p: p["QuestionType"] == "TE" and
+                             p["Validation"]["Settings"].get("ContentType") == "ValidNumber"))
 
 
 def choice(tag, html, options, text_entry=()):
@@ -206,27 +257,26 @@ def choice(tag, html, options, text_entry=()):
         choices[str(i)] = {"Display": o}
         if i in text_entry:
             choices[str(i)]["TextEntry"] = "true"
-    return add({"QuestionText": html, "DataExportTag": tag, "QuestionType": "MC", "Selector": "SAVR",
-                "SubSelector": "TX", "Choices": choices, "ChoiceOrder": list(range(1, len(options) + 1)),
-                "Validation": force(), "NextChoiceId": len(options) + 1, "NextAnswerId": 1})
+    return add({"QuestionText": html, "DataExportTag": tag, "Choices": choices,
+                "ChoiceOrder": list(range(1, len(options) + 1)), "Validation": force(),
+                "NextChoiceId": len(options) + 1, "NextAnswerId": 1},
+               base_question(lambda p: p["QuestionType"] == "MC" and p.get("Selector") == "SAVR"))
 
 
 def slider(tag, html, lo, hi, left, right):
     return add({
-        "QuestionText": html, "DataExportTag": tag, "QuestionType": "Slider", "Selector": "HSLIDER",
+        "QuestionText": html, "DefaultChoices": False, "DataExportTag": tag, "QuestionType": "Slider",
+        "Selector": "HSLIDER",
         "Configuration": {"QuestionDescriptionOption": "UseText", "CSSliderMin": lo, "CSSliderMax": hi,
                           "GridLines": 10, "SnapToGrid": False, "NumDecimals": "0", "ShowValue": True,
                           "CustomStart": False, "NotApplicable": False, "MobileFirst": True},
-        "Choices": {"1": {"Display": ""}}, "ChoiceOrder": ["1"],
+        "Choices": {"1": {"Display": ""}}, "ChoiceOrder": [1],
         "Labels": {"1": {"Display": left}, "2": {"Display": right}},
         "Validation": force(), "NextChoiceId": 2, "NextAnswerId": 1})
 
 
 def matrix(tag, html, items, answers, randomize=True):
-    p = {"QuestionText": html, "DataExportTag": tag, "QuestionType": "Matrix", "Selector": "Likert",
-         "SubSelector": "SingleAnswer",
-         "Configuration": {"QuestionDescriptionOption": "UseText", "TextPosition": "inline", "ChoiceColumnWidth": 35,
-                           "RepeatHeaders": "none", "WhiteSpace": "OFF", "MobileFirst": True},
+    p = {"QuestionText": html, "DataExportTag": tag,
          "Choices": {str(i): {"Display": t} for i, t in enumerate(items, 1)},
          "ChoiceOrder": list(range(1, len(items) + 1)),
          "Answers": {str(i): {"Display": a} for i, a in enumerate(answers, 1)},
@@ -235,7 +285,7 @@ def matrix(tag, html, items, answers, randomize=True):
          "Validation": force(), "NextChoiceId": len(items) + 1, "NextAnswerId": len(answers) + 1}
     if randomize:
         p["Randomization"] = {"Advanced": None, "TotalRandSubset": "", "Type": "All"}
-    return add(p)
+    return add(p, base_of_type("Matrix", "Likert"))
 
 
 def scale(n, left, right):
@@ -253,14 +303,14 @@ def block(desc, *pages, kind="Standard"):
         if i:
             els.append({"Type": "Page Break"})
         els += [{"Type": "Question", "QuestionID": q} for q in page]
-    bid = "BL_evenHanded%04d" % _bl[0]
+    bid = qid15("BL_", 100 + _bl[0])
     blocks.append({"Type": kind, "SubType": "", "Description": desc, "ID": bid, "BlockElements": els})
     return bid
 
 
 # ---------------------------------------------------------------- questions and blocks
 B = {}
-B["consent"] = block("Consent", [text("consent", "<strong>[CONSENT: paste your IRB-approved consent form here before launch.]</strong>")], kind="Default")
+B["consent"] = block("Consent", [copied("consent", lambda p: "Permission to Take Part" in p["QuestionText"])], kind="Default")
 B["intro"] = block("Intro", [text("intro", INTRO)])
 
 q_belief = entry("belief", "${e://Field/belief_prompt}", "SL", 200)
@@ -315,8 +365,8 @@ B["demo"] = block("Demographics", [
             "I rarely use AI tools"]),
     slider("ai_trust", "How much do you trust generative AI tools?", 1, 100, "1<br>Not at all", "100<br>Completely"),
 ])
-B["debrief"] = block("Debriefing", [text("debrief", "<strong>[DEBRIEFING: paste your IRB-approved debriefing here before launch.]</strong>")])
-blocks.append({"Type": "Trash", "Description": "Trash / Unused Questions", "ID": "BL_evenHandedTrash", "BlockElements": []})
+B["debrief"] = block("Debriefing", [copied("debrief", lambda p: p["QuestionDescription"].strip().startswith("Debriefing"))])
+blocks.append({"Type": "Trash", "Description": "Trash / Unused Questions", "ID": qid15("BL_", 99), "BlockElements": []})
 
 # ---------------------------------------------------------------- survey flow
 _fl = [1]
@@ -374,18 +424,12 @@ flow = [
     std(B["debrief"]),
 ]
 
-options = {
-    "BackButton": "false", "SaveAndContinue": "true", "SurveyProtection": "PublicSurvey",
-    "BallotBoxStuffingPrevention": "true", "NoIndex": "Yes", "SecureResponseFiles": "true",
-    "SurveyExpiration": "None", "SurveyTermination": "DefaultMessage", "Header": "", "Footer": "",
-    "ProgressBarDisplay": "None", "PartialData": "+1 week", "ValidationMessage": None, "PreviousButton": "",
-    "NextButton": "", "SurveyTitle": "Qualtrics Survey | Qualtrics Experience Management",
-    "NewScoring": 1, "EOSMessage": None, "ShowExportTags": "false", "CollectGeoLocation": "false",
-    "PasswordProtection": "No", "AnonymizeResponse": "No", "RefererCheck": "No", "RecaptchaV3": "false",
-    "ConfirmStart": False, "AutoConfirmStart": False, "RelevantID": "false", "ResponseSummary": "No",
-    "EOSRedirectURL": None, "EmailThankYou": "false", "AvailableLanguages": {"EN": []},
-    "ProtectSelectionIds": True, "CustomStyles": {"customCSS": CUSTOM_CSS},
-}
+# The base survey's settings, with the chat styles and without its SONA credit
+# redirect (that one points to the old study's experiment ID).
+options = copy.deepcopy(BASE_EL["Survey Options"]["Payload"])
+options["CustomStyles"] = {"customCSS": CUSTOM_CSS}
+options["SurveyTermination"] = "DefaultMessage"
+options["EOSRedirectURL"] = None
 
 
 def element(kind, primary, payload, secondary=None, tertiary=None):
@@ -393,26 +437,16 @@ def element(kind, primary, payload, secondary=None, tertiary=None):
             "SecondaryAttribute": secondary, "TertiaryAttribute": tertiary, "Payload": payload}
 
 
+entry_ = dict(BASE["SurveyEntry"], SurveyName="Even-Handed Chatbot", SurveyStatus="Inactive")
+kept = [copy.deepcopy(e) for e in BASE["SurveyElements"] if e["Element"] in ("PL", "PROJ", "RS", "SCO", "STAT")]
 survey = {
-    "SurveyEntry": {
-        "SurveyID": SURVEY_ID, "SurveyName": "Even-Handed Chatbot", "SurveyDescription": None,
-        "SurveyOwnerID": "", "SurveyBrandID": "", "DivisionID": None, "SurveyLanguage": "EN",
-        "SurveyActiveResponseSet": "RS_evenHanded01", "SurveyStatus": "Inactive",
-        "SurveyStartDate": "0000-00-00 00:00:00", "SurveyExpirationDate": "0000-00-00 00:00:00",
-        "SurveyCreationDate": "2026-10-30 00:00:00", "CreatorID": "", "LastModified": "2026-10-30 00:00:00",
-        "LastAccessed": "0000-00-00 00:00:00", "LastActivated": "0000-00-00 00:00:00", "Deleted": None},
+    "SurveyEntry": entry_,
     "SurveyElements": [
         element("BL", "Survey Blocks", blocks),
         element("FL", "Survey Flow", {"Type": "Root", "FlowID": "FL_1", "Flow": flow, "Properties": {"Count": _fl[0]}}),
-        element("PROJ", "CORE", {"ProjectCategory": "CORE", "SchemaVersion": "1.1.0"}, tertiary="1.1.0"),
         element("QC", "Survey Question Count", None, secondary=str(len(questions))),
-        element("RS", "RS_evenHanded01", None),
-        element("SCO", "Scoring", {"ScoringCategories": [], "ScoringCategoryGroups": [], "ScoringSummaryCategory": None,
-                                   "ScoringSummaryAfterQuestions": 0, "ScoringSummaryAfterSurvey": 0,
-                                   "DefaultScoringCategory": None, "AutoScoringCategory": None}),
         element("SO", "Survey Options", options),
-        element("STAT", "Survey Statistics", {"MobileCompatible": True, "ID": "Survey Statistics"}),
-    ] + questions,
+    ] + kept + questions,
 }
 
 with open(OUT, "w", encoding="utf-8") as f:
