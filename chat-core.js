@@ -613,10 +613,11 @@ var BalancedChat = (function () {
   // gun control") into a neutral topic phrase ("gun control") to pipe into the
   // blanks of the scale items ("My views about ___ may change...").
   var TOPIC_PHRASE_PROMPT =
-    "You will get a belief someone wrote. Reply with a short noun phrase (1-6 words) naming what the belief is about, " +
+    "You will get a belief someone wrote. Reply with a short noun phrase (usually 1-3 words) naming the subject the belief is about, " +
     'so it reads naturally in the blank of "My views about ___ may change with additional evidence." ' +
-    "Stay specific: reuse the belief's own key words and keep both things if it compares two, rather than a broader category. " +
-    "Keep it neutral: name the issue, not their claim about it, and leave out words like should, more, less, good, bad, better, worse or overrated. " +
+    "Name just the subject, in the belief's own words, and drop whatever they claim about it. " +
+    "If it compares two things, keep both. Don't widen it into a broader category. " +
+    "Leave out words like should, more, less, good, bad, better, worse or overrated. " +
     "Use lowercase unless a word is a proper noun. Reply with the phrase only.";
   var TOPIC_PHRASE_FALLBACK = "this topic";
 
@@ -632,8 +633,9 @@ var BalancedChat = (function () {
     return n >= 1 && n <= 8 ? p : "";
   }
 
-  // Resolves to { phrase, ok }; never rejects. On any failure the phrase is the
-  // fallback ("this topic"), which still reads correctly in every item.
+  // Resolves to { phrase, ok }; never rejects. A failed or overlong answer is
+  // retried once (temperature 0 still varies a little); after that the phrase is
+  // the fallback ("this topic"), which still reads correctly in every item.
   function topicPhrase(belief, cfg, fetchFn) {
     cfg = Object.assign({}, DEFAULTS, cfg || {});
     fetchFn = fetchFn || function (url, init) { return fetch(url, init); };
@@ -641,16 +643,18 @@ var BalancedChat = (function () {
     if (!String(belief || "").trim()) return Promise.resolve(fail);
     var body = buildRequest(Object.assign({}, cfg, { temperature: 0, max_tokens: 20 }), TOPIC_PHRASE_PROMPT, [],
       String(belief).replace(/[\r\n]+/g, " ").trim());
-    return fetchFn(cfg.proxy_url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    })
-      .then(function (res) { return res.ok ? res.json() : {}; })
-      .then(function (data) {
-        var phrase = cleanTopicPhrase(data && data.text);
-        return phrase ? { phrase: phrase, ok: true } : fail;
-      }, function () { return fail; });
+    function attempt() {
+      return fetchFn(cfg.proxy_url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      })
+        .then(function (res) { return res.ok ? res.json() : {}; })
+        .then(function (data) { return cleanTopicPhrase(data && data.text); }, function () { return ""; });
+    }
+    return attempt()
+      .then(function (phrase) { return phrase || attempt(); })
+      .then(function (phrase) { return phrase ? { phrase: phrase, ok: true } : fail; });
   }
 
   return {

@@ -513,7 +513,12 @@ test("topic phrase: one neutral call, cleaned output, safe fallback", async () =
   assert.equal(BC.cleanTopicPhrase("about pineapple on pizza"), "pineapple on pizza");
   assert.equal(BC.cleanTopicPhrase("gun control\nExplanation: ..."), "gun control");
   assert.equal(BC.cleanTopicPhrase("this is far too long to be a short topic phrase for a blank"), "");
+  const before = calls.length;
   assert.deepEqual(await BC.topicPhrase("x", {}, reply("", false)), { phrase: "this topic", ok: false });
+  assert.equal(calls.length - before, 2); // retried once
+  const answers = ["vaccines being mandatory for kids going to public school or not", "vaccines"];
+  const flaky = (url, init) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ text: answers.shift() }) });
+  assert.deepEqual(await BC.topicPhrase("Vaccines should be mandatory", {}, flaky), { phrase: "vaccines", ok: true });
   assert.deepEqual(await BC.topicPhrase("x", {}, () => Promise.reject(new Error("down"))), { phrase: "this topic", ok: false });
   assert.deepEqual(await BC.topicPhrase("  ", {}, reply("gun control")), { phrase: "this topic", ok: false });
 });
