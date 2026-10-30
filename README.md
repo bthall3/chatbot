@@ -33,7 +33,7 @@ The model writes the whole message itself, and the page shows it as-is. It answe
 Open the GitHub Pages URL; mock mode is described further down.
 
 - **Left:** edit the system prompt and settings, then click **Apply & restart chat**. Your edits are saved in your browser.
-- **Middle:** pick the belief condition (high- or low-value), write a belief in answer to that condition's prompt, say why you hold it, and chat. The belief becomes the chat topic (`{topic}`) and the reason becomes their view (`{p_response}`). Both prompts can be edited under **Advanced**. The page stops after the set number of messages (5 by default).
+- **Middle:** pick the belief condition (high- or low-value), write a belief in answer to that condition's prompt, say why you hold it, and chat. The belief becomes the chat topic (`{topic}`) and the reason becomes their view (`{p_response}`). Both prompts can be edited under **Advanced**. The page stops after the set number of messages (7 by default, as in the study).
 - **Right:** the transcript builds up as you chat. Add your overall notes at the bottom and click **Email feedback**, which sends the transcript, notes and settings. **Download JSON** is a fallback.
 
 Add `?mock=1` to the URL to test the page without calling the API:
@@ -62,6 +62,7 @@ Add `?mock=1` to the URL to test the page without calling the API:
 | `config.js` | Web3Forms key and email subject. |
 | `proxy/` | Cloudflare Worker that forwards chats to OpenAI (supports reasoning models), plus deploy steps. |
 | `qualtrics/` | How to add this as a 4th arm in the survey (`README.md`, `question.html`, `adapter.js`). |
+| `qualtrics/Even_Handed_Chatbot.qsf` | The whole study as a Qualtrics import file, built by `qualtrics/build_qsf.py` (see `qualtrics/README.md`). |
 | `qualtrics/topic-phrase.js` | Turns the belief into a short topic phrase for the intellectual humility scale items. |
 | `tests/` | Unit tests: `node --test "tests/*.test.*"` |
 

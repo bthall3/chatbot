@@ -70,7 +70,7 @@ var BalancedChat = (function () {
     temperature: 0.5,
     max_tokens: 300,
     word_limit: 60,
-    max_messages: 5,
+    max_messages: 7,
     // "balanced" (for + against their current leaning) | "congenial" (supports their
     // original view) | "uncongenial" (challenges their original view)
     condition: "balanced",

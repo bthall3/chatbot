@@ -22,7 +22,7 @@ Qualtrics.SurveyEngine.addOnReady(function () {
   // value is not a valid model ID, and gpt-4.1-nano shuts down Oct 23, 2026.
   // Requires the balanced-chat-proxy worker (proxy/README.md).
   var cfg = {
-    max_messages: 5
+    max_messages: 7
   };
 
   // One script for all three arms: the survey flow sets `cond` to balanced,

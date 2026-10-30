@@ -4,7 +4,7 @@
 
   var PAGE = window.PAGE_CONFIG || {};
   var MOCK = /[?&]mock=1\b/.test(location.search);
-  var SETTINGS_KEY = "balancedChat.settings.v18"; // v18: prompts anchored to the belief ({topic}), not the reason
+  var SETTINGS_KEY = "balancedChat.settings.v19"; // v19: 7 participant messages, as in the study
 
   // Shown on the start form for each belief condition (editable under Advanced).
   var PAGE_DEFAULTS = {
