@@ -497,3 +497,23 @@ test("direction check: uncongenial wants AGAINST; a failed check never blocks th
   await t2.chat.start();
   assert.equal(t2.log.response_0, "Against.");
 });
+
+// ---------- topic phrase for the scale ----------
+test("topic phrase: one neutral call, cleaned output, safe fallback", async () => {
+  const calls = [];
+  const reply = (text, ok = true) => (url, init) => {
+    calls.push(JSON.parse(init.body));
+    return Promise.resolve({ ok, status: ok ? 200 : 500, json: () => Promise.resolve({ text }) });
+  };
+  let r = await BC.topicPhrase("We need more gun control", {}, reply('"Gun control."'));
+  assert.deepEqual(r, { phrase: "Gun control", ok: true });
+  assert.equal(calls[0].system, BC.TOPIC_PHRASE_PROMPT);
+  assert.equal(calls[0].prompt, "We need more gun control");
+  assert.equal(calls[0].temperature, 0);
+  assert.equal(BC.cleanTopicPhrase("about pineapple on pizza"), "pineapple on pizza");
+  assert.equal(BC.cleanTopicPhrase("gun control\nExplanation: ..."), "gun control");
+  assert.equal(BC.cleanTopicPhrase("this is far too long to be a short topic phrase for a blank"), "");
+  assert.deepEqual(await BC.topicPhrase("x", {}, reply("", false)), { phrase: "this topic", ok: false });
+  assert.deepEqual(await BC.topicPhrase("x", {}, () => Promise.reject(new Error("down"))), { phrase: "this topic", ok: false });
+  assert.deepEqual(await BC.topicPhrase("  ", {}, reply("gun control")), { phrase: "this topic", ok: false });
+});

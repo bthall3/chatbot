@@ -62,6 +62,7 @@ Add `?mock=1` to the URL to test the page without calling the API:
 | `config.js` | Web3Forms key and email subject. |
 | `proxy/` | Cloudflare Worker that forwards chats to OpenAI (supports reasoning models), plus deploy steps. |
 | `qualtrics/` | How to add this as a 4th arm in the survey (`README.md`, `question.html`, `adapter.js`). |
+| `qualtrics/topic-phrase.js` | Turns the belief into a short topic phrase for the intellectual humility scale items. |
 | `tests/` | Unit tests: `node --test "tests/*.test.*"` |
 
 ## Logged fields (same names in Qualtrics)
@@ -70,6 +71,7 @@ Add `?mock=1` to the URL to test the page without calling the API:
 - `support_N`, `dissent_N`: the model's summary of the consideration it wove in for the participant's current leaning, and the one from the other side. After a shift, the dissent is the backing for the side they moved away from.
 - `stance_N`: the model's read of the participant: `original`, `shifted` or `mixed`.
 - `direction_N` (congenial/uncongenial): the direction check's verdict on the message shown, `FOR`, `AGAINST` or `NEITHER` the original view (empty if the check didn't return a verdict). The message is shown either way; a wrong verdict only steers the next reply.
+- `topic_phrase` (Qualtrics, set by `qualtrics/topic-phrase.js`): the belief as a short, neutral topic phrase for the scale items; `topic_phrase_ok` is `0` if the fallback "this topic" was used. The test page shows it under the belief and includes it in the report.
 - `words_N`: word count of the reply as shown.
 - `parse_ok_N`: `0` if the reply was unreadable (raw text shown) or pointed the wrong way for the condition after one retry (the model's message is shown; `support_N`/`dissent_N` show what it reported).
 - `error_N`: network or format problems on that turn.

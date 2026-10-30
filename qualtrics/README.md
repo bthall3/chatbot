@@ -36,6 +36,13 @@ The existing custom CSS (`#chat-container`, `.bot-message`, …) already styles 
 
   Then ask "Why do you hold this belief?". Set `topic` to the belief and `p_response` to the reason in an Embedded Data element after those questions (piped `${q://QIDx/ChoiceTextEntryValue}`). `value_cond` is saved by the survey itself; the chat code doesn't need it.
 
+- **Intellectual humility scale topic:** to fill the blanks of the scale items ("My views about ___ may change…") with the participant's topic, follow the steps in `qualtrics/topic-phrase.js`:
+  - put it on the "Why do you hold this belief?" question, or any question on a later page than the belief;
+  - in the scale items, use `${e://Field/topic_phrase}` in each blank;
+  - declare `topic_phrase` and `topic_phrase_ok` with the other fields.
+
+  A separate model call turns the belief into a short, neutral phrase ("We need more gun control" → "gun control"). If the call fails, the phrase is "this topic" and `topic_phrase_ok` is `0`.
+
 ## 3. Check before launch
 - **`p_response` and `topic`:** the launched flow set these with a trailing "Custom Value", which is very likely leftover placeholder text that ends up in the prompt. Make sure the new piped values have nothing extra, then preview and check the stored values.
 - **Preview test:** run one preview of the balanced arm. Confirm that `response_N`, `support_N`, and `dissent_N` all filled in and that `parse_ok_N` is `1`.

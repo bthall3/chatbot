@@ -193,6 +193,16 @@
     session.system = chat.system;
     $("sent-prompt").textContent = chat.system;
     chat.start();
+
+    // Separate call: the belief as a short topic phrase for the scale items.
+    $("phrase-shown").textContent = "…";
+    var thisSession = session;
+    BalancedChat.topicPhrase(vars.topic, cfg, MOCK ? mockFetch : undefined).then(function (r) {
+      if (session !== thisSession) return;
+      session.topic_phrase = r.phrase;
+      session.topic_phrase_ok = r.ok;
+      $("phrase-shown").textContent = r.phrase + (r.ok ? "" : " (fallback: the call failed)");
+    });
   }
 
   // ---------- feedback ----------
@@ -241,6 +251,8 @@
       condition: session.cfg.condition,
       value_cond: session.vars.value_cond,
       topic: session.vars.topic,
+      topic_phrase: session.topic_phrase || "",
+      topic_phrase_ok: !!session.topic_phrase_ok,
       p_response: session.vars.p_response,
       settings: session.cfg,
       system_prompt_sent: session.system,
@@ -275,6 +287,7 @@
       "Submitted: " + rep.submitted_at + (rep.mock ? "  [MOCK MODE]" : ""),
       "Belief condition: " + rep.value_cond + "-value",
       "Belief: " + rep.topic,
+      "Scale topic phrase: " + (rep.topic_phrase || "(not ready)") + (rep.topic_phrase && !rep.topic_phrase_ok ? " (fallback)" : ""),
       "Why they hold it: " + rep.p_response,
       "",
       "OVERALL NOTES:",
@@ -379,6 +392,9 @@
         var cond = session ? session.cfg.condition : "balanced";
         var forPt = cond === "uncongenial" ? "" : "mock supporting point #" + mockCount;
         var againstPt = cond === "congenial" ? "" : "mock challenging point #" + mockCount;
+        if (body.system === BalancedChat.TOPIC_PHRASE_PROMPT) {
+          return resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ text: "mock topic" }); } });
+        }
         var text = /BADJSON/.test(body.prompt)
           ? "Sorry, here is plain text instead of JSON."
           : JSON.stringify({

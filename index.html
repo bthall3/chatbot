@@ -5,13 +5,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chatbot Lab</title>
-  <link rel="stylesheet" href="styles.css?v=2026-10-30.2">
+  <link rel="stylesheet" href="styles.css?v=2026-10-30.3">
 </head>
 <body>
   <header class="topbar">
     <h1>Chatbot Lab</h1>
     <p>Test the study chatbots. <strong>Balanced</strong> weaves one point <em>for</em> your view and one <em>against</em> it into each reply; <strong>congenial</strong> gives only a point for it; <strong>uncongenial</strong> only a point against it.</p>
-    <small class="muted" id="version">Version 2026-10-30.2 (prompts anchored to the participant's belief)</small>
+    <small class="muted" id="version">Version 2026-10-30.3 (scale topic phrase)</small>
     <span id="mock-badge" class="badge" hidden>Mock mode: no real API calls</span>
   </header>
 
@@ -102,7 +102,8 @@
       </form>
 
       <div id="chat-area" hidden>
-        <p class="topic-line"><strong>Belief:</strong> <span id="topic-shown"></span></p>
+        <p class="topic-line"><strong>Belief:</strong> <span id="topic-shown"></span><br>
+          <strong>Scale topic:</strong> <span id="phrase-shown">…</span> <small class="muted">(piped into the intellectual humility items: "My views about ___ …")</small></p>
         <div id="chat-error" class="error-box" role="alert" hidden></div>
         <div id="chat-container">
           <div id="chat-history-1"></div>
@@ -131,8 +132,8 @@
     </section>
   </main>
 
-  <script src="config.js?v=2026-10-30.2"></script>
-  <script src="chat-core.js?v=2026-10-30.2"></script>
-  <script src="app.js?v=2026-10-30.2"></script>
+  <script src="config.js?v=2026-10-30.3"></script>
+  <script src="chat-core.js?v=2026-10-30.3"></script>
+  <script src="app.js?v=2026-10-30.3"></script>
 </body>
 </html>

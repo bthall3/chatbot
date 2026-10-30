@@ -608,8 +608,56 @@ var BalancedChat = (function () {
     return { start: start, send: send, stop: stop, state: state, cfg: cfg, system: system };
   }
 
+  // ---------- topic phrase for the intellectual-humility scale ----------
+  // A separate, one-off model call turns the participant's belief ("We need more
+  // gun control") into a neutral topic phrase ("gun control") to pipe into the
+  // blanks of the scale items ("My views about ___ may change...").
+  var TOPIC_PHRASE_PROMPT =
+    "You will get a belief someone wrote. Reply with a short noun phrase (1-6 words) naming what the belief is about, " +
+    'so it reads naturally in the blank of "My views about ___ may change with additional evidence." ' +
+    "Stay specific: reuse the belief's own key words and keep both things if it compares two, rather than a broader category. " +
+    "Keep it neutral: name the issue, not their claim about it, and leave out words like should, more, less, good, bad, better, worse or overrated. " +
+    "Use lowercase unless a word is a proper noun. Reply with the phrase only.";
+  var TOPIC_PHRASE_FALLBACK = "this topic";
+
+  // Strips quotes, a leading "about" and end punctuation; rejects anything that
+  // isn't a short phrase.
+  function cleanTopicPhrase(text) {
+    var p = String(text || "").split(/\r?\n/)[0].trim()
+      .replace(/^["'\u201C\u2018]+|["'\u201D\u2019]+$/g, "")
+      .replace(/^about\s+/i, "")
+      .replace(/[.!?;:,]+$/, "")
+      .trim();
+    var n = countWords(p);
+    return n >= 1 && n <= 8 ? p : "";
+  }
+
+  // Resolves to { phrase, ok }; never rejects. On any failure the phrase is the
+  // fallback ("this topic"), which still reads correctly in every item.
+  function topicPhrase(belief, cfg, fetchFn) {
+    cfg = Object.assign({}, DEFAULTS, cfg || {});
+    fetchFn = fetchFn || function (url, init) { return fetch(url, init); };
+    var fail = { phrase: TOPIC_PHRASE_FALLBACK, ok: false };
+    if (!String(belief || "").trim()) return Promise.resolve(fail);
+    var body = buildRequest(Object.assign({}, cfg, { temperature: 0, max_tokens: 20 }), TOPIC_PHRASE_PROMPT, [],
+      String(belief).replace(/[\r\n]+/g, " ").trim());
+    return fetchFn(cfg.proxy_url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    })
+      .then(function (res) { return res.ok ? res.json() : {}; })
+      .then(function (data) {
+        var phrase = cleanTopicPhrase(data && data.text);
+        return phrase ? { phrase: phrase, ok: true } : fail;
+      }, function () { return fail; });
+  }
+
   return {
     DEFAULTS: DEFAULTS,
+    TOPIC_PHRASE_PROMPT: TOPIC_PHRASE_PROMPT,
+    cleanTopicPhrase: cleanTopicPhrase,
+    topicPhrase: topicPhrase,
     DEFAULT_PROMPT: DEFAULT_PROMPT,
     FORMAT_INSTRUCTIONS: FORMAT_INSTRUCTIONS,
     fillTemplate: fillTemplate,
