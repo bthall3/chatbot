@@ -4,7 +4,7 @@
 
   var PAGE = window.PAGE_CONFIG || {};
   var MOCK = /[?&]mock=1\b/.test(location.search);
-  var SETTINGS_KEY = "balancedChat.settings.v17"; // v17: balanced stays even-handed after a shift
+  var SETTINGS_KEY = "balancedChat.settings.v18"; // v18: prompts anchored to the belief ({topic}), not the reason
 
   // Shown on the start form for each belief condition (editable under Advanced).
   var PAGE_DEFAULTS = {

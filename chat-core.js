@@ -18,7 +18,7 @@ var BalancedChat = (function () {
   // conditions. Question endings, the side reminder and the "idk" stance rule
   // are handled in code (withHint, recordTurn).
   var DEFAULT_PROMPT = [
-    'You\'re chatting with someone about "{topic}". Their view, in their words: "{p_response}".',
+    'You\'re chatting with someone who believes "{topic}". Why, in their words: "{p_response}".',
     "Talk like a friendly person texting: casual, 2-3 short sentences (25-40 words, never over {word_limit}). Reply directly to what they just said and keep it about the topic.",
     "Don't open by agreeing with or praising them (\"exactly\", \"totally\", \"great point\").",
     "Don't repeat a point or a question you've already used.",
@@ -91,15 +91,15 @@ var BalancedChat = (function () {
     statement_hint: "(For this reply: end on a statement, not a question.)",
     // Directional bots drift toward the middle late in a chat, so every request
     // repeats which side to land on (sent with the request only, like the hints above).
-    side_hint_congenial: "(Your point should land in support of their original view: \"{p_response}\".)",
-    side_hint_uncongenial: "(Your point should land against their original view: \"{p_response}\".)",
+    side_hint_congenial: "(Your point should land in support of their original view: \"{topic}\".)",
+    side_hint_uncongenial: "(Your point should land against their original view: \"{topic}\".)",
     // Directional bots only: a second, quick model call grades each message as
     // FOR / AGAINST / NEITHER the original view while it is being shown. If it
     // landed on the wrong side, the next request swaps the side reminder for this
     // correction ({drift} says how the last message came across).
     direction_check: true,
-    direction_fix_hint_congenial: "(Your last message came across as {drift}. Make sure this one lands in support of their original view: \"{p_response}\".)",
-    direction_fix_hint_uncongenial: "(Your last message came across as {drift}. Make sure this one lands against their original view: \"{p_response}\".)",
+    direction_fix_hint_congenial: "(Your last message came across as {drift}. Make sure this one lands in support of their original view: \"{topic}\".)",
+    direction_fix_hint_uncongenial: "(Your last message came across as {drift}. Make sure this one lands against their original view: \"{topic}\".)",
     closing_message: "Thank you for the conversation! We will now move on to the next part of the study.",
     error_message: "Sorry, something went wrong. Please send your message again.",
     opening_fallback: "Thanks for sharing your view. What would you like to discuss about this topic?"
@@ -253,7 +253,7 @@ var BalancedChat = (function () {
   /*
    * opts:
    *   cfg      - settings (missing keys fall back to DEFAULTS)
-   *   vars     - { topic, p_response }
+   *   vars     - { topic, p_response }: the participant's belief and why they hold it
    *   store    - { set(key, value) }  (Qualtrics: setEmbeddedData)
    *   dom      - { history, input, button } elements
    *   fetch    - optional fetch implementation (tests / mock mode)
@@ -357,9 +357,8 @@ var BalancedChat = (function () {
     // participant's original view? Resolves to "" if the check itself fails.
     function judgeDirection(message) {
       var judgeSystem =
-        'You check one chatbot message from a conversation about the statement "' + clean(vars.topic) + '". ' +
-        'The participant\'s original view, in their words: "' + clean(vars.p_response) + '". ' +
-        "Taken as a whole, does the message land FOR that original view, AGAINST it, or NEITHER (balanced, neutral or unclear)? " +
+        'You check one chatbot message from a conversation with someone who believes "' + clean(vars.topic) + '". ' +
+        "Taken as a whole, does the message land FOR that belief, AGAINST it, or NEITHER (balanced, neutral or unclear)? " +
         "Answer with one word: FOR, AGAINST or NEITHER.";
       return callProxy([], message, { system: judgeSystem, temperature: 0, max_tokens: 10 })
         .then(function (text) {
@@ -512,7 +511,7 @@ var BalancedChat = (function () {
       var last = state.records[state.records.length - 1];
       var drifted = last && last.direction && WANT[condition] && last.direction !== WANT[condition];
       var sideKey = (drifted ? "direction_fix_hint_" : "side_hint_") + condition;
-      var side = cfg[sideKey] ? fillTemplate(cfg[sideKey], { p_response: vars.p_response, drift: drifted ? DRIFT[last.direction] : "" }) : "";
+      var side = cfg[sideKey] ? fillTemplate(cfg[sideKey], { topic: vars.topic, drift: drifted ? DRIFT[last.direction] : "" }) : "";
       var hints = [side, endingHint(cfg, turn, participantMessage)].filter(function (h) { return h; });
       return hints.length ? prompt + "\n\n" + hints.join(" ") : prompt;
     }

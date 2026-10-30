@@ -5,12 +5,12 @@ This is a test page for the study's information-exposure chatbots, from the sele
 | Condition | In every message |
 |---|---|
 | **balanced** | one consideration for the participant's current view **and** one against it |
-| **congenial** | one consideration **for** their *original* view (the one they wrote before the chat) |
+| **congenial** | one consideration **for** their *original* view: the belief they wrote before the chat |
 | **uncongenial** | one consideration **against** their *original* view |
 
 All three use **the same prompt**. Only the condition rules (`{condition_rules}`) differ; a unit test checks that everything else is identical. The directional bots stay anchored to the participant's **original** view for the whole chat, as in selective exposure designs. Congenial keeps backing it even if they start to doubt it, and uncongenial keeps challenging it. They may briefly acknowledge what the participant said (e.g. "that can help, but…") as long as each message clearly lands on their side. The balanced bot instead follows the participant's *current* leaning (see below). Congenial and uncongenial give one consideration per message versus two for balanced, so amount of information is confounded with direction.
 
-**Keeping the directional bots on their side:** every request to a congenial or uncongenial bot repeats which side its point must land on, quoting the participant's original view (sent with the request, not stored in the history). While each message is being shown, a second, quick model call grades it as `FOR`, `AGAINST` or `NEITHER` the original view (`direction_N`). Nothing is rewritten: if the message landed on the wrong side, the next request replaces the usual side reminder with a correction ("Your last message came across as neutral or in the middle. Make sure this one lands against their original view…"). The check runs during the typing delay, so it adds no wait. This is the **Direction check** setting.
+**Keeping the directional bots on their side:** every request to a congenial or uncongenial bot repeats which side its point must land on, quoting the belief they wrote (`{topic}`, sent with the request, not stored in the history). While each message is being shown, a second, quick model call grades it as `FOR`, `AGAINST` or `NEITHER` the original view (`direction_N`). Nothing is rewritten: if the message landed on the wrong side, the next request replaces the usual side reminder with a correction ("Your last message came across as neutral or in the middle. Make sure this one lands against their original view…"). The check runs during the typing delay, so it adds no wait. This is the **Direction check** setting.
 
 The rest of this README describes the balanced bot; the same style, length, neutrality and question rules apply to all three.
 

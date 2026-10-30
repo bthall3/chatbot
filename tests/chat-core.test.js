@@ -95,7 +95,7 @@ test("stance is parsed and normalized; it is optional", () => {
 test("prompt is the researcher's wording with the format instructions appended", () => {
   const sys = BC.buildSystemPrompt(BC.DEFAULTS, { topic: "T", p_response: "line1\nline2" });
   assert.equal(sys, [
-    'You\'re chatting with someone about "T". Their view, in their words: "line1 line2".',
+    'You\'re chatting with someone who believes "T". Why, in their words: "line1 line2".',
     "Talk like a friendly person texting: casual, 2-3 short sentences (25-40 words, never over 60). Reply directly to what they just said and keep it about the topic.",
     'Don\'t open by agreeing with or praising them ("exactly", "totally", "great point").',
     "Don't repeat a point or a question you've already used.",
@@ -445,7 +445,7 @@ test("directional bots get a side reminder each turn; balanced does not", async 
   await t.chat.start();
   await t.say("I still think so because of my experience with it");
   const chatCalls = calls.filter((c) => !/^You check/.test(c.system));
-  assert.match(chatCalls[0].prompt, /land in support of their original view: "He was dominant\."/);
+  assert.match(chatCalls[0].prompt, /land in support of their original view: "Jordan is the GOAT"/);
   assert.match(chatCalls[1].prompt, /^I still think so because of my experience with it\n\n\(Your point should land in support/);
   assert.equal(t.chat.state.history[1].content, "I still think so because of my experience with it"); // not in history
   const b = setup([good(0)]);
@@ -459,7 +459,7 @@ test("direction check: on-side message passes with one judge call and is logged"
   const t = setup([], { condition: "congenial" }, { fetch: routed([forOnly], ["FOR"], calls) });
   await t.chat.start();
   const judge = calls.find((c) => /^You check/.test(c.system));
-  assert.match(judge.system, /original view, in their words: "He was dominant\."/);
+  assert.match(judge.system, /conversation with someone who believes "Jordan is the GOAT"\. Taken as a whole, does the message land FOR that belief/);
   assert.equal(judge.prompt, "For.");
   assert.equal(judge.temperature, 0);
   assert.equal(t.log.direction_0, "FOR");
@@ -478,7 +478,7 @@ test("direction check: a drifted message is shown as is and the next reply is st
   assert.equal(calls.length, 2); // no rewrite
   await t.say("I am not sure about that point at all honestly");
   let chatCalls = calls.filter((c) => !/^You check/.test(c.system));
-  assert.match(chatCalls[1].prompt, /\(Your last message came across as against their original view\. Make sure this one lands in support of their original view: "He was dominant\."\.\)/);
+  assert.match(chatCalls[1].prompt, /\(Your last message came across as against their original view\. Make sure this one lands in support of their original view: "Jordan is the GOAT"\.\)/);
   assert.equal(t.log.direction_1, "FOR");
   await t.say("Okay that is a fair point I suppose, tell me more");
   chatCalls = calls.filter((c) => !/^You check/.test(c.system));
