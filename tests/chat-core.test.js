@@ -100,8 +100,8 @@ test("prompt is the researcher's wording with the format instructions appended",
     'Don\'t open by agreeing with or praising them ("exactly", "totally", "great point").',
     "Don't repeat a point or a question you've already used.",
     "If they're brief or uninterested, keep it short and casual; never treat the chat like an assignment.",
-    "In every message, naturally work in one point for the view they lean toward now and one point against it.",
-    "If they move toward the other side, go with them: back their new view and keep the other side to a brief, gentle note.",
+    "Be even-handed in the way you discuss the topic. In every message, naturally work in one point for the view they lean toward now and one point against it.",
+    "If they move toward the other side, continue to be even-handed: back their new view and also suggest backing for the alternative side.",
     "",
     BC.FORMAT_INSTRUCTIONS
   ].join("\n"));
@@ -138,7 +138,7 @@ test("condition rules are the researcher's wording and differ only in direction"
   const sys = (cond) => BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: cond }), { topic: "T", p_response: "R" });
   assert.match(sys("congenial"), /In every message, naturally work in one point that supports their view\. You can briefly acknowledge the other side, but every message should land in support of their view\./);
   assert.match(sys("uncongenial"), /In every message, naturally work in one point that challenges their view\. You can briefly acknowledge what they said, but every message should land against their view\./);
-  assert.match(sys("balanced"), /one point for the view they lean toward now and one point against it\.\nIf they move toward the other side, go with them/);
+  assert.match(sys("balanced"), /one point for the view they lean toward now and one point against it\.\nIf they move toward the other side, continue to be even-handed: back their new view and also suggest backing for the alternative side\./);
   assert.equal(BC.buildSystemPrompt(Object.assign({}, BC.DEFAULTS, { condition: "nonsense" }), { topic: "T", p_response: "R" }), sys("balanced"));
 });
 

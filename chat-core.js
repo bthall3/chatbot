@@ -37,8 +37,8 @@ var BalancedChat = (function () {
   var CONDITIONS = {
     balanced: {
       rules: [
-        "In every message, naturally work in one point for the view they lean toward now and one point against it.",
-        "If they move toward the other side, go with them: back their new view and keep the other side to a brief, gentle note."
+        "Be even-handed in the way you discuss the topic. In every message, naturally work in one point for the view they lean toward now and one point against it.",
+        "If they move toward the other side, continue to be even-handed: back their new view and also suggest backing for the alternative side."
       ].join("\n"),
       examples: "",
       rewrite: "keeping one point for and one against"
@@ -114,7 +114,7 @@ var BalancedChat = (function () {
     });
   }
 
-  // word_limit 50 -> gentle counterpoint after a shift: about 10 words.
+  // Legacy placeholders for older custom prompts (e.g. {soft_words}).
   function wordBudgets(cfg) {
     var limit = parseInt(cfg.word_limit, 10) || 50;
     return {

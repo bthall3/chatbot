@@ -25,7 +25,7 @@ The bot is a **conversation partner first**. It replies to what the participant 
 
 **Bored or distracted participants:** for short, noncommittal or off-topic replies, the bot stays brief (under about 25 words), still includes both considerations, and steers back with an easy question. It never treats the chat as an assignment or comments on their effort, and "idk"-type replies don't count as a change of view.
 
-**Following the participant:** "support" and "dissent" are relative to where the participant stands *now*, not just their opening view. If they start agreeing with the other side, the bot follows. Its main point builds on their new leaning, and the counterpoint becomes a brief, gentle "worth keeping in mind" from the side they moved away from (about half as long), never a rebuttal. While they hold their original view, both points are equally strong.
+**Following the participant:** "support" and "dissent" are relative to where the participant stands *now*, not just their opening view. If they start agreeing with the other side, the bot stays even-handed: it backs their new view and also gives backing for the side they moved away from.
 
 The model writes the whole message itself, and the page shows it as-is. It answers in JSON (`stance`, `message`, `support`, `dissent`). `message` is what the participant reads. `support` and `dissent` are the model's short summaries of the two considerations it wove in; they're logged, never shown. A turn only counts as valid if it has the considerations its condition calls for (both for balanced, only a supporting one for congenial, only a challenging one for uncongenial). An unreadable reply is retried once; a readable one that points the wrong way gets one targeted repair request naming the part to drop or add.
 
@@ -67,7 +67,7 @@ Add `?mock=1` to the URL to test the page without calling the API:
 ## Logged fields (same names in Qualtrics)
 - `msg_N`: participant message.
 - `response_N`: the bot's message as shown; `response_0` is the opening message.
-- `support_N`, `dissent_N`: the model's summary of the consideration it wove in for the participant's current leaning, and the one from the other side. After a shift, the dissent is the gentle counterpoint.
+- `support_N`, `dissent_N`: the model's summary of the consideration it wove in for the participant's current leaning, and the one from the other side. After a shift, the dissent is the backing for the side they moved away from.
 - `stance_N`: the model's read of the participant: `original`, `shifted` or `mixed`.
 - `direction_N` (congenial/uncongenial): the direction check's verdict on the message shown, `FOR`, `AGAINST` or `NEITHER` the original view (empty if the check didn't return a verdict). The message is shown either way; a wrong verdict only steers the next reply.
 - `words_N`: word count of the reply as shown.
@@ -79,7 +79,7 @@ Add `?mock=1` to the URL to test the page without calling the API:
 - **Public page:** anyone with the URL can use the proxy, which spends API credit.
 - **Length confound:** about 60 words per reply here versus 30 in the launched arms.
 - **Model shutdown:** `gpt-4.1-nano`, the model used by the launched arms, is scheduled to shut down on Oct 23, 2026, per OpenAI's deprecations page.
-- **Shift detection:** the model judges `stance` itself. Check `stance_N` against the transcripts during piloting. After a shift, the two sides are no longer equally weighted, so balance varies by participant; account for this in analysis.
+- **Shift detection:** the model judges `stance` itself. Check `stance_N` against the transcripts during piloting. Because the bot stays even-handed after a shift, a wrong `stance` only swaps which side is called "support" and which "dissent" in the log.
 - **Self-reported balance:** the page can't see inside free prose, so `support_N` and `dissent_N` are the model's own account of what it wove in. Spot-check them against `response_N` during piloting.
 - **Word limit:** a long message gets one rewrite request. If it's still over, it's shown and flagged, because free prose can't be cut safely.
 - **Accuracy:** the "evidence" comes from a small model and can be wrong or made up. Use the overall notes to flag weak or inaccurate points during piloting.

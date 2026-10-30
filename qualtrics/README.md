@@ -46,4 +46,4 @@ The existing custom CSS (`#chat-container`, `.bot-message`, …) already styles 
 - The opening message is itself a balanced, conversational reply, not the generic "warm" opener the other arms use.
 - The 5th participant message gets no API call. The launched arms generate `response_5` but never show it.
 - While a reply is pending, the input is locked. A failed request asks the participant to resend instead of failing silently.
-- The bot follows the participant. While they hold their starting view, the two points are equally strong. If they shift toward the other side (`stance_N` = `shifted` or `mixed`), the main point backs their new leaning and the counterpoint becomes brief and gentle, so balance after a shift varies by participant.
+- The bot stays even-handed throughout. If the participant shifts toward the other side (`stance_N` = `shifted` or `mixed`), it backs their new view and also gives backing for the side they moved away from; `support_N` and `dissent_N` are then relative to the new view.
